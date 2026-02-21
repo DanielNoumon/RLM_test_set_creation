@@ -92,6 +92,22 @@ class TimedRLM:
                 print(response)
                 print("-" * 40)
             
+            # Log the final answer as a dedicated MLflow span
+            with mlflow.start_span(
+                name="rlm_final_answer",
+                span_type="CHAIN",
+            ) as span:
+                span.set_inputs({
+                    "query": query,
+                    "model": self.config["model"],
+                    "recursive_model": self.config["recursive_model"],
+                    "duration_seconds": round(call_duration, 2),
+                })
+                span.set_outputs({
+                    "final_answer": response,
+                    "answer_length": len(response) if response else 0,
+                })
+            
             print(f"{'='*60}\n")
             
             return response
