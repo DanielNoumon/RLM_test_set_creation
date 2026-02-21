@@ -30,7 +30,6 @@ RLM_CONFIG = {
     "recursive_model": "gpt-5-nano",
     "depth": 1,  # Currently not implemented in rlm-minimal
     "track_timing": True,  # Track timing for each call
-    "print_outputs": True  # Print all agent outputs
 }
 
 # Document Configuration
@@ -62,9 +61,9 @@ class TimedRLM:
         import time
         
         print(f"\n{'='*60}")
-        print(f"🤖 RLM CALL #{self.total_calls + 1}")
-        print(f"📝 Query: {query}")
-        print(f"⚙️  Model: {self.config['model']} (recursive: {self.config['recursive_model']})")
+        print(f"RLM CALL #{self.total_calls + 1}")
+        print(f"Query: {query}")
+        print(f"Model: {self.config['model']} (recursive: {self.config['recursive_model']})")
         print(f"{'='*60}")
         
         start_time = time.time()
@@ -80,17 +79,6 @@ class TimedRLM:
             self.call_times.append(call_duration)
             self.call_outputs.append(response)
             self.total_calls += 1
-            
-            # Print timing and output info
-            print(f"⏱️  Duration: {call_duration:.2f} seconds")
-            print(f"📊 Total calls so far: {self.total_calls}")
-            print(f"📈 Average duration: {sum(self.call_times)/len(self.call_times):.2f}s")
-            
-            if self.config.get("print_outputs", True):
-                print(f"\n📤 RLM OUTPUT:")
-                print("-" * 40)
-                print(response)
-                print("-" * 40)
             
             # Log the final answer as a dedicated MLflow span
             with mlflow.start_span(
@@ -108,15 +96,13 @@ class TimedRLM:
                     "answer_length": len(response) if response else 0,
                 })
             
-            print(f"{'='*60}\n")
-            
             return response
             
         except Exception as e:
             end_time = time.time()
             call_duration = end_time - start_time
             
-            print(f"❌ ERROR after {call_duration:.2f} seconds: {e}")
+            print(f"ERROR after {call_duration:.2f} seconds: {e}")
             print(f"{'='*60}\n")
             
             raise e
@@ -145,7 +131,7 @@ if MLFLOW_CONFIG["enabled"]:
     mlflow.set_tracking_uri(f"sqlite:///{mlflow_db}")
     mlflow.set_experiment(MLFLOW_CONFIG["experiment_name"])
     mlflow.disable_system_metrics_logging()
-    print(f"✓ MLflow tracking enabled (SQLite): {mlflow_db}")
+    print(f"MLflow tracking enabled (SQLite): {mlflow_db}")
 
 # Add rlm-minimal to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'rlm-minimal-main'))
@@ -169,9 +155,9 @@ if azure_api_version and not os.getenv("AZURE_OPENAI_API_VERSION"):
 
 try:
     from rlm.rlm_repl import RLM_REPL
-    print("✓ RLM_REPL imported successfully")
+    print("RLM_REPL imported successfully")
 except ImportError as e:
-    print(f"✗ Failed to import RLM_REPL: {e}")
+    print(f"Failed to import RLM_REPL: {e}")
     sys.exit(1)
 
 def load_dsl_documents():
@@ -180,7 +166,7 @@ def load_dsl_documents():
     data_path = DATA_PATH
     
     if not os.path.exists(data_path):
-        print(f"❌ Data path not found: {data_path}")
+        print(f"ERROR: Data path not found: {data_path}")
         return documents
     
     for file_path in os.listdir(data_path):
@@ -237,7 +223,7 @@ def prepare_context(documents):
 @mlflow.trace(name="test_rlm_question")
 def test_rlm_question():
     """Test RLM with DSL vacation days question"""
-    print("🔍 Testing RLM with DSL vacation days question...")
+    print("Testing RLM with DSL vacation days question...")
 
     # Start MLflow run
     if MLFLOW_CONFIG["enabled"]:
@@ -248,23 +234,23 @@ def test_rlm_question():
         mlflow.log_param("max_iterations", RLM_CONFIG["max_iterations"])
         mlflow.log_param("depth", RLM_CONFIG["depth"])
         mlflow.log_param("data_path", DATA_PATH)
-        print("✓ MLflow run started")
+        print("MLflow run started")
 
     try:
         # Load documents
-        print("📄 Loading DSL documents...")
+        print("Loading DSL documents...")
         doc_load_start = time.time()
         documents = load_dsl_documents()
         doc_load_time = time.time() - doc_load_start
 
         if not documents:
-            print("❌ No documents found!")
+            print("ERROR: No documents found!")
             if MLFLOW_CONFIG["enabled"]:
                 mlflow.log_param("error", "no_documents_found")
                 mlflow.end_run(status="FAILED")
             return False
 
-        print(f"✓ Loaded {len(documents)} documents")
+        print(f"Loaded {len(documents)} documents")
 
         if MLFLOW_CONFIG["enabled"]:
             mlflow.log_metric("doc_load_time_seconds", doc_load_time)
@@ -278,19 +264,19 @@ def test_rlm_question():
                 )
 
         # Prepare context
-        print("� Preparing context...")
+        print("Preparing context...")
         context = prepare_context(documents)
         total_context_size = sum(
             len(str(doc)) for doc in context
         )
-        print(f"✓ Context prepared with {len(context)} documents")
-        print(f"📊 Total context size: {total_context_size} characters")
+        print(f"Context prepared with {len(context)} documents")
+        print(f"Total context size: {total_context_size} characters")
 
         if MLFLOW_CONFIG["enabled"]:
             mlflow.log_metric("total_context_size_chars", total_context_size)
 
         # Initialize RLM
-        print("🤖 Initializing RLM...")
+        print("Initializing RLM...")
         rlm = RLM_REPL(
             api_key=azure_key,
             model=RLM_CONFIG["model"],
@@ -298,31 +284,25 @@ def test_rlm_question():
             max_iterations=RLM_CONFIG["max_iterations"],
             enable_logging=RLM_CONFIG["enable_logging"]
         )
-        print("✓ RLM initialized successfully")
+        print("RLM initialized successfully")
 
         # Wrap with timing tracker
         if RLM_CONFIG.get("track_timing", True):
             rlm = TimedRLM(rlm, RLM_CONFIG)
-            print("✓ Timing tracker enabled")
+            print("Timing tracker enabled")
 
         # Test question
         question = TEST_QUESTION
-        print(f"❓ Question: {question}")
+        print(f"Question: {question}")
 
         # Get answer from RLM
-        print("🧠 Getting answer from RLM...")
+        print("Getting answer from RLM...")
         start_time = time.time()
 
         response = rlm.completion(context=context, query=question)
 
         total_duration = time.time() - start_time
-        print(f"✓ Answer received in {total_duration:.2f} seconds")
-
-        print("\n" + "="*80)
-        print("RLM ANSWER:")
-        print("="*80)
-        print(response)
-        print("="*80)
+        print(f"\nAnswer received in {total_duration:.2f} seconds")
 
         # Log metrics and artifacts to MLflow
         if MLFLOW_CONFIG["enabled"]:
@@ -351,35 +331,35 @@ def test_rlm_question():
         if hasattr(rlm, 'get_stats'):
             stats = rlm.get_stats()
             if stats:
-                print(f"\n📊 TIMING STATISTICS:")
-                print(f"📈 Total RLM calls: {stats['total_calls']}")
-                print(f"⏱️  Total time: {stats['total_time']:.2f}s")
-                print(f"📊 Average per call: {stats['avg_time']:.2f}s")
-                print(f"⚡ Fastest call: {stats['min_time']:.2f}s")
-                print(f"🐌 Slowest call: {stats['max_time']:.2f}s")
-                print(f"📋 Call times: {[f'{t:.2f}s' for t in stats['call_times']]}")
+                print(f"\nTIMING STATISTICS:")
+                print(f"Total RLM calls: {stats['total_calls']}")
+                print(f"Total time: {stats['total_time']:.2f}s")
+                print(f"Average per call: {stats['avg_time']:.2f}s")
+                print(f"Fastest call: {stats['min_time']:.2f}s")
+                print(f"Slowest call: {stats['max_time']:.2f}s")
+                print(f"Call times: {[f'{t:.2f}s' for t in stats['call_times']]}")
 
         if MLFLOW_CONFIG["enabled"]:
             mlflow.end_run()
-            print("✓ MLflow run completed")
+            print("MLflow run completed")
 
         return True
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR: {e}")
         if MLFLOW_CONFIG["enabled"]:
             mlflow.log_param("error", str(e))
             mlflow.end_run(status="FAILED")
         return False
 
 if __name__ == "__main__":
-    print("🚀 Starting RLM Question Test")
+    print("Starting RLM Question Test")
     print("="*50)
     
     success = test_rlm_question()
     
     if success:
-        print("\n✅ Test completed successfully!")
+        print("\nTest completed successfully!")
     else:
-        print("\n❌ Test failed!")
+        print("\nTest failed!")
         sys.exit(1)
