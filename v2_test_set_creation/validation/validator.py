@@ -62,17 +62,28 @@ class Validator:
             }
 
         # Check 3: answer grounded in passage
+        # Skip grounding for types where answer intentionally
+        # diverges from passage content.
+        _SKIP_GROUNDING = {
+            QuestionType.HALLUCINATION_TEST,
+            QuestionType.ADVERSARIAL_AGGRO,
+            QuestionType.PROMPT_INJECTION,
+            QuestionType.TOOL_CALL_CHECK,
+        }
         answer = q_data.get("answer", "")
-        answer_grounded = self._is_answer_grounded(
-            answer, golden_ctx
-        )
-        if not answer_grounded:
-            return {
-                "valid": False,
-                "reason": "answer not grounded in passage",
-                "match_ratio": ctx_ratio,
-                "answer_grounded": False,
-            }
+        if question_type in _SKIP_GROUNDING:
+            answer_grounded = True
+        else:
+            answer_grounded = self._is_answer_grounded(
+                answer, golden_ctx
+            )
+            if not answer_grounded:
+                return {
+                    "valid": False,
+                    "reason": "answer not grounded in passage",
+                    "match_ratio": ctx_ratio,
+                    "answer_grounded": False,
+                }
 
         # Check 4: context length
         if len(golden_ctx.strip()) < 30:

@@ -46,14 +46,39 @@ class SectionEntities:
 
 # ── Patterns ────────────────────────────────────────────
 
+_DUTCH_MONTHS = (
+    r"januari|februari|maart|april|mei|juni|juli"
+    r"|augustus|september|oktober|november|december"
+)
+_EN_MONTHS = (
+    r"january|february|march|april|may|june|july"
+    r"|august|september|october|november|december"
+)
+_DUTCH_NUMBERS = (
+    r"een|twee|drie|vier|vijf|zes|zeven|acht|negen"
+    r"|tien|elf|twaalf|dertien|veertien|vijftien"
+    r"|twintig|dertig|veertig|vijftig|honderd"
+)
+
 _DATE_PATTERNS = re.compile(
+    # dd-mm-yyyy, dd/mm/yyyy, dd.mm.yyyy
     r"\b\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}\b"
-    r"|\b\d{1,2}\s+(?:januari|februari|maart|april|mei"
-    r"|juni|juli|augustus|september|oktober|november"
-    r"|december)\s+\d{4}\b"
-    r"|\b(?:january|february|march|april|may|june|july"
-    r"|august|september|october|november|december)"
-    r"\s+\d{1,2},?\s+\d{4}\b",
+    # 12 mei 2024
+    r"|\b\d{1,2}\s+(?:" + _DUTCH_MONTHS + r")\s+\d{4}\b"
+    # mei 2024, december 2025
+    r"|\b(?:" + _DUTCH_MONTHS + r")\s+\d{4}\b"
+    # English: May 12, 2024
+    r"|\b(?:" + _EN_MONTHS + r")\s+\d{1,2},?\s+\d{4}\b"
+    # standalone year: 2024, 2025
+    r"|\b(?:19|20)\d{2}\b"
+    # ordinals: 16e, 1e, 21e
+    r"|\b\d{1,2}e\b"
+    # durations: 52 weken, 104 weken, 3 maanden
+    r"|\b\d+\s+(?:weken|week|maanden|maand"
+    r"|jaren|jaar|dagen|dag|uur)\b"
+    # Dutch number + duration: vier weken, twee jaar
+    r"|\b(?:" + _DUTCH_NUMBERS + r")\s+(?:weken|week"
+    r"|maanden|maand|jaren|jaar|dagen|dag|uur)\b",
     re.IGNORECASE,
 )
 

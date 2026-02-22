@@ -306,26 +306,50 @@ if __name__ == "__main__":
         QuestionType.MULTI_HOP_BETWEEN_DOCUMENTS: QuestionConfig(
             enabled=True, count=3, difficulty="hard"
         ),
-        # QuestionType.CROSS_DOCUMENT_CONFLICT: QuestionConfig(
-        #     enabled=True, count=2, difficulty="hard"
-        # ),
-        # QuestionType.TEMPORAL_QUESTIONS: QuestionConfig(
-        #     enabled=True, count=2, difficulty="medium"
-        # ),
-        # QuestionType.NEEDLE_IN_HAYSTACK: QuestionConfig(
-        #     enabled=True, count=2, difficulty="hard"
-        # ),
-        # QuestionType.LISTS_EXTRACTION: QuestionConfig(
-        #     enabled=True, count=2, difficulty="easy"
-        # ),
-        # QuestionType.HALLUCINATION_TEST: QuestionConfig(
-        #     enabled=True, count=2, difficulty="medium"
-        # ),
-        # QuestionType.ADVERSARIAL_AGGRO: QuestionConfig(
-        #     enabled=True, count=2, difficulty="hard"
-        # ),
-        # QuestionType.PROMPT_INJECTION: QuestionConfig(
-        #     enabled=True, count=2, difficulty="hard"
+        QuestionType.CROSS_DOCUMENT_CONFLICT: QuestionConfig(
+            enabled=True, count=3, difficulty="hard"
+        ),
+        QuestionType.TEMPORAL_QUESTIONS: QuestionConfig(
+            enabled=True, count=3, difficulty="medium"
+        ),
+        QuestionType.NEEDLE_IN_HAYSTACK: QuestionConfig(
+            enabled=True, count=3, difficulty="hard"
+        ),
+        QuestionType.LISTS_EXTRACTION: QuestionConfig(
+            enabled=True, count=3, difficulty="easy"
+        ),
+        QuestionType.HALLUCINATION_TEST: QuestionConfig(
+            enabled=True, count=3, difficulty="medium"
+        ),
+        QuestionType.ADVERSARIAL_AGGRO: QuestionConfig(
+            enabled=True, count=3, difficulty="hard"
+        ),
+        QuestionType.PROMPT_INJECTION: QuestionConfig(
+            enabled=True, count=3, difficulty="hard"
+        ),
+        QuestionType.PINPOINTING_QUOTING: QuestionConfig(
+            enabled=True, count=3, difficulty="medium"
+        ),
+        QuestionType.LONG_CONTEXT_SYNTHESIS: QuestionConfig(
+            enabled=True, count=3, difficulty="hard"
+        ),
+        QuestionType.AMBIGUOUS_QUESTIONS: QuestionConfig(
+            enabled=True, count=3, difficulty="medium"
+        ),
+        QuestionType.TOOL_CALL_CHECK: QuestionConfig(
+            enabled=True, count=3, difficulty="hard"
+        ),
+        QuestionType.TABLES_EXTRACTION: QuestionConfig(
+            enabled=True, count=3, difficulty="medium"
+        ),
+        QuestionType.INFOGRAPHIC_EXTRACTION: QuestionConfig(
+            enabled=True, count=3, difficulty="medium"
+        ),
+        QuestionType.MULTI_TURN_FOLLOWUP: QuestionConfig(
+            enabled=True, count=3, difficulty="medium"
+        ),
+        # QuestionType.ACCESS_CONTROL: QuestionConfig(
+        #     enabled=True, count=3, difficulty="hard"
         # ),
     }
 

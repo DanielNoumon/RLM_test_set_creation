@@ -190,10 +190,16 @@ def _multi_hop_within_strategy(
     rng.shuffle(candidates[:min(len(candidates), count * 3)])
 
     results = []
+    used_docs = {}  # doc -> count, to spread across docs
     for ea, eb, fname, _ in candidates:
         if len(results) >= count:
             break
         if tracker.is_used(ea.section) and tracker.is_used(eb.section):
+            continue
+        # Limit to 1 pair per document to force diversity
+        if used_docs.get(fname, 0) >= max(1, count // len(
+            {c[2] for c in candidates}
+        )):
             continue
         passage_a = ea.section.full_text
         passage_b = eb.section.full_text
@@ -214,6 +220,30 @@ def _multi_hop_within_strategy(
         ))
         tracker.mark_used(ea.section, fname)
         tracker.mark_used(eb.section, fname)
+        used_docs[fname] = used_docs.get(fname, 0) + 1
+
+    # If diversity limit blocked us, fill remaining
+    if len(results) < count:
+        for ea, eb, fname, _ in candidates:
+            if len(results) >= count:
+                break
+            if tracker.is_used(ea.section) and tracker.is_used(eb.section):
+                continue
+            passage_a = _truncate_passage(ea.section.full_text, 800)
+            passage_b = _truncate_passage(eb.section.full_text, 800)
+            combined = f"{passage_a}\n\n---\n\n{passage_b}"
+            results.append(PassageCandidate(
+                passage=combined,
+                source_documents=[fname],
+                chapter=ea.section.heading,
+                subchapters=[eb.section.heading],
+                page_start=ea.section.page_start,
+                page_end=eb.section.page_end,
+                section=ea.section,
+                section_b=eb.section,
+            ))
+            tracker.mark_used(ea.section, fname)
+            tracker.mark_used(eb.section, fname)
 
     return results
 
@@ -401,6 +431,39 @@ def _hallucination_test_strategy(
     return results
 
 
+def _tables_extraction_strategy(
+    count: int,
+    index: SearchIndex,
+    entities_map: List[SectionEntities],
+    documents: List[Document],
+    tracker: DiversityTracker,
+    rng: random.Random,
+) -> List[PassageCandidate]:
+    """Find sections with tabular or structured numeric data.
+
+    Tries has_table first; falls back to sections dense in
+    numbers, money amounts, or percentages (quasi-tabular).
+    """
+    scored = []
+    for ent in entities_map:
+        sec = ent.section
+        if tracker.is_used(sec) or sec.word_count() < 15:
+            continue
+        if sec.has_table:
+            score = sec.word_count() + 100
+            scored.append((ent, float(score)))
+            continue
+        num_density = (
+            len(ent.numbers) + len(ent.money_amounts)
+        )
+        if num_density >= 2:
+            scored.append((ent, float(num_density * 10)))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    rng.shuffle(scored[:min(len(scored), count * 3)])
+    return _build_candidates(scored[:count * 2], count, tracker)
+
+
 def _generic_strategy(
     count: int,
     index: SearchIndex,
@@ -490,7 +553,7 @@ _STRATEGIES = {
     QuestionType.HALLUCINATION_TEST: _hallucination_test_strategy,
     QuestionType.PINPOINTING_QUOTING: _direct_lookup_strategy,
     QuestionType.LONG_CONTEXT_SYNTHESIS: _paraphrase_lookup_strategy,
-    QuestionType.TABLES_EXTRACTION: _lists_extraction_strategy,
+    QuestionType.TABLES_EXTRACTION: _tables_extraction_strategy,
     QuestionType.CROSS_DOCUMENT_CONFLICT: _multi_hop_between_strategy,
     QuestionType.AMBIGUOUS_QUESTIONS: _paraphrase_lookup_strategy,
     QuestionType.ADVERSARIAL_AGGRO: _generic_strategy,

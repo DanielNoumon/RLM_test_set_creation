@@ -78,12 +78,16 @@ TYPE_INSTRUCTIONS = {
         "ambiguity and provide the most likely interpretation."
     ),
     QuestionType.HALLUCINATION_TEST: (
-        "Generate a HALLUCINATION TEST question that CANNOT "
-        "be answered from the provided passage. The passage "
-        "is shown only so you know what topics the documents "
-        "cover — your question must ask about something "
-        "NOT mentioned. The expected answer should state that "
-        "the information is not available in the documents."
+        "Generate a HALLUCINATION TEST question. "
+        "CRITICAL: The question MUST ask about something that "
+        "is NOT mentioned, NOT covered, and NOT answerable "
+        "from the passage. The passage is shown ONLY so you "
+        "know the domain — invent a plausible-sounding "
+        "question about a DIFFERENT topic, policy, person, "
+        "or detail that does NOT appear anywhere in the text. "
+        "The answer MUST explicitly state that this "
+        "information is not available in the documents. "
+        "Do NOT ask about anything that IS in the passage."
     ),
     QuestionType.ADVERSARIAL_AGGRO: (
         "Generate an ADVERSARIAL / AGGRO question that uses "

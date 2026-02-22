@@ -65,6 +65,20 @@ _DEFINITION_RE = re.compile(
 )
 
 
+def _clean_heading(text: str) -> str:
+    """Strip PDF artifacts from headings.
+
+    Removes leading standalone page numbers, excess whitespace,
+    and newlines that leak from PDF extraction.
+    """
+    # Remove leading standalone page numbers like "5 \n \n \n"
+    text = re.sub(r"^\s*\d{1,3}\s*[\n\r]+", "", text)
+    # Collapse internal newlines and whitespace
+    text = re.sub(r"[\n\r]+", " ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
+
+
 def parse_pdf(filepath: str) -> Document:
     """Parse a PDF file into a structured Document."""
     doc = fitz.open(filepath)
@@ -219,7 +233,7 @@ def _detect_sections_heuristic(
         )
 
         sec = Section(
-            heading=h_text,
+            heading=_clean_heading(h_text),
             content=content,
             level=level,
             page_start=page_start,
@@ -270,7 +284,9 @@ def _fallback_page_sections(
             continue
         # Use first non-empty line as heading
         lines = [ln for ln in text.split("\n") if ln.strip()]
-        heading = lines[0].strip() if lines else f"Page {i + 1}"
+        heading = _clean_heading(
+            lines[0].strip()
+        ) if lines else f"Page {i + 1}"
         content = "\n".join(lines[1:]).strip() if lines else ""
 
         sections.append(Section(
