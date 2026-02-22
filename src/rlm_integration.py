@@ -64,9 +64,10 @@ class RLMIntegration:
             "questions. Each question should ask about a single "
             "specialized term, abbreviation, or concept that "
             "actually appears in the documents. For example: "
-            "'What does [abbreviation] stand for?' or 'What is "
-            "meant by [term] in this context?'. Keep questions "
-            "short (1 sentence). The answer should explain the "
+            "'What does [abbreviation] stand for at DSL?' or "
+            "'What role does [term] play within the [specific "
+            "function] at DSL?'. Keep questions short "
+            "(1 sentence). The answer should explain the "
             "term using ONLY information from the documents. "
             "Do NOT use external knowledge to define terms. "
             "IMPORTANT: Before including a term, use "
@@ -1043,6 +1044,8 @@ PASSAGE (from chapter: {chapter}):
 {passage}
 \"\"\"
 
+SOURCE DOCUMENTS: {', '.join(sources)}
+CHAPTER / SECTION: {chapter}
 QUESTION TYPE: {type_hint}
 DIFFICULTY: {difficulty}
 
@@ -1055,6 +1058,30 @@ It must NOT be a copy of the passage.
 - The question should be in the same language as the passage.
 - Do NOT reference "the passage" or "the document" in the \
 question — phrase it as a natural question a user would ask.
+
+SELF-CONTAINEDNESS (CRITICAL):
+The question will later be shown to an AI chatbot that has \
+NEVER seen the source documents and does NOT know which \
+chapter, role, or section it came from. The question MUST \
+be fully understandable on its own. Specifically:
+- Do NOT use deictic references like "deze context", \
+"dit document", "deze rol", "hierboven", "onderstaand". \
+Instead, name the subject explicitly.
+- Do NOT use "je" / "jij" as if the reader IS a specific \
+role. Name the role in the question. \
+BAD: "Met wie ontwikkel je het jaarplan voor het chapter?" \
+GOOD: "Met wie ontwikkelt de Managing Consultant het \
+tactisch jaarplan voor het chapter volgens DSL?"
+- Do NOT assume the reader knows which section, role, or \
+document is being discussed. Include enough context \
+(role name, topic, organization) to make the question \
+unambiguous standalone. \
+BAD: "Wat wordt bedoeld met 'Trusted Advisor' in deze \
+context?" \
+GOOD: "Wat houdt de rol 'Trusted Advisor' in binnen de \
+functie van Strategy Consultant bij DSL?"
+- The question must read naturally — as if a real employee \
+is asking an HR knowledge base chatbot.
 
 Return ONLY a JSON object (no extra text):
 {{
