@@ -10,6 +10,7 @@ class QuestionType(Enum):
     PARAPHRASE_LOOKUP = "paraphrase_lookup"
     SPECIFIC_JARGON = "specific_jargon"
     MULTI_HOP_WITHIN_CORPUS = "multi_hop_within_corpus"
+    MULTI_HOP_BETWEEN_DOCUMENTS = "multi_hop_between_documents"
     CROSS_DOCUMENT_CONFLICT = "cross_document_conflict"
     TEMPORAL_QUESTIONS = "temporal_questions"
     PINPOINTING_QUOTING = "pinpointing_quoting"
@@ -56,6 +57,9 @@ class TestSetConfig:
     
     # Question type configurations
     question_types: Dict[QuestionType, QuestionConfig] = field(default_factory=dict)
+    
+    # Naming
+    corpus_name: str = "test_set"  # Used in output filename
     
     # General settings
     total_questions: int = 100

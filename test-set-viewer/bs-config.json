@@ -1,0 +1,9 @@
+{
+  "server": {
+    "baseDir": "./",
+    "routes": {
+      "/data": "../data"
+    }
+  },
+  "files": ["*.html", "dist/**/*.js", "styles/**/*.css"]
+}

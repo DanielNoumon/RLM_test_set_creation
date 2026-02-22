@@ -4,6 +4,7 @@ RLM-based Test Set Creator
 import os
 import json
 import time
+from datetime import datetime
 from typing import List, Dict, Any
 from pathlib import Path
 
@@ -123,6 +124,9 @@ class TestSetCreator:
         enabled_types = self.config.get_enabled_question_types()
         print(f"Generating questions for {len(enabled_types)} types")
         
+        covered_topics: List[str] = []
+        covered_documents: List[str] = []
+
         for question_type in enabled_types:
             config = self.config.question_types[question_type]
             print(f"Generating {config.count} {question_type.value} questions...")
@@ -130,13 +134,23 @@ class TestSetCreator:
             # Use RLM for sophisticated question generation
             if hasattr(self.rlm, 'generate_questions_with_rlm'):
                 questions = self.rlm.generate_questions_with_rlm(
-                    documents, question_type, config.count
+                    documents, question_type, config.count,
+                    difficulty=config.difficulty,
+                    covered_topics=covered_topics,
+                    covered_documents=covered_documents
                 )
             else:
                 # Fallback to basic generators
                 generator = QuestionGeneratorFactory.get_generator(question_type, config)
                 questions = generator.generate_questions(documents, config.count)
             
+            # Track topics and documents for diversity
+            for q in questions:
+                covered_topics.append(q["question"])
+                for src in q.get("source_documents", []):
+                    if src not in covered_documents:
+                        covered_documents.append(src)
+
             all_questions.extend(questions)
             metrics["questions_by_type"][question_type.value] = len(questions)
         
@@ -160,11 +174,13 @@ class TestSetCreator:
     
     def save_test_set(self, test_set: Dict[str, Any], output_path: str):
         """Save test set to file"""
-        os.makedirs(output_path, exist_ok=True)
+        name = self.config.corpus_name.replace(" ", "_")
+        corpus_dir = os.path.join(output_path, name)
+        os.makedirs(corpus_dir, exist_ok=True)
         
-        timestamp = int(time.time())
-        filename = f"test_set_{timestamp}.json"
-        filepath = os.path.join(output_path, filename)
+        date_str = datetime.now().strftime("%d_%m_%y_T%H_%M")
+        filename = f"{name}_{date_str}.json"
+        filepath = os.path.join(corpus_dir, filename)
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(test_set, f, indent=2, ensure_ascii=False)
@@ -176,7 +192,11 @@ class TestSetCreator:
         return filepath
     
     def run(self):
-        """Run the complete test set creation pipeline"""
+        """Run the complete test set creation pipeline.
+
+        Returns:
+            Tuple of (output_file_path, test_set_dict).
+        """
         print("Starting RLM Test Set Creator...")
         
         # Load documents
@@ -189,4 +209,4 @@ class TestSetCreator:
         # Save results
         output_file = self.save_test_set(test_set, self.config.output_path)
         
-        return output_file
+        return output_file, test_set

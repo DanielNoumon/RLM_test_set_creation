@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Set Viewer</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <header>
+    <h1>Test Set Viewer</h1>
+    <div id="file-upload">
+      <label for="json-input">Load test set JSON:</label>
+      <input type="file" id="json-input" accept=".json">
+    </div>
+  </header>
+
+  <section id="metadata-panel" class="hidden"></section>
+
+  <section id="controls" class="hidden">
+    <div id="filter-bar">
+      <label for="type-filter">Filter by type:</label>
+      <select id="type-filter">
+        <option value="all">All types</option>
+      </select>
+
+      <label for="difficulty-filter">Difficulty:</label>
+      <select id="difficulty-filter">
+        <option value="all">All</option>
+        <option value="easy">Easy</option>
+        <option value="medium">Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+
+      <label for="search-input">Search:</label>
+      <input type="text" id="search-input" placeholder="Search questions...">
+    </div>
+    <p id="result-count"></p>
+  </section>
+
+  <main id="table-container" class="hidden">
+    <div class="table-scroll">
+      <table id="questions-table">
+        <thead>
+          <tr>
+            <th class="col-id">#</th>
+            <th class="col-type">Type</th>
+            <th class="col-difficulty">Diff.</th>
+            <th class="col-question">Question (Prompt)</th>
+            <th class="col-golden-context">Golden Context</th>
+            <th class="col-golden-answer">Golden Answer</th>
+            <th class="col-sources">Sources</th>
+            <th class="col-metadata">Metadata</th>
+            <th class="col-gen-prompt">Generation Prompt</th>
+          </tr>
+        </thead>
+        <tbody id="questions-tbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <div id="empty-state">
+    <h2>No test set loaded</h2>
+    <p>Use the file picker above to load a test set JSON file.</p>
+  </div>
+
+  <!-- Modal for expanding long cell content -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal">
+      <div id="modal-header">
+        <h3 id="modal-title"></h3>
+        <button id="modal-close">&times;</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="dist/app.js"></script>
+</body>
+</html>
