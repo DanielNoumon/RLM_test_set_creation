@@ -24,6 +24,7 @@ class QAGenerator:
         chapter: str,
         question_type: QuestionType,
         difficulty: str,
+        doc_metadata: dict = None,
     ) -> Optional[Dict[str, str]]:
         """Generate a single Q+A pair from a passage.
 
@@ -36,6 +37,7 @@ class QAGenerator:
             chapter=chapter,
             question_type=question_type,
             difficulty=difficulty,
+            doc_metadata=doc_metadata,
         )
 
         try:
@@ -50,6 +52,21 @@ class QAGenerator:
         result = _try_parse_json(response)
         if not result:
             return None
+
+        # Multi-turn followup returns four fields
+        if question_type == QuestionType.MULTI_TURN_FOLLOWUP:
+            q1 = result.get("question_turn_1", "").strip()
+            a1 = result.get("answer_turn_1", "").strip()
+            q2 = result.get("question_turn_2", "").strip()
+            a2 = result.get("answer_turn_2", "").strip()
+            if not q1 or not a1 or not q2 or not a2:
+                return None
+            return {
+                "question": q1,
+                "answer": a1,
+                "question_turn_2": q2,
+                "answer_turn_2": a2,
+            }
 
         q = result.get("question", "").strip()
         a = result.get("answer", "").strip()

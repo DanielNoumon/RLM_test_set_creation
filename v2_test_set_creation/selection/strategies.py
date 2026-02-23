@@ -105,11 +105,14 @@ def _paraphrase_lookup_strategy(
 
     Good paraphrase questions come from sections with
     substantive explanations (not just lists of facts).
+    Skips boilerplate sections (copyright, addresses, footers).
     """
     scored = []
     for ent in entities_map:
         sec = ent.section
         if tracker.is_used(sec) or sec.word_count() < 25:
+            continue
+        if _is_boilerplate(sec):
             continue
         # Prefer longer, descriptive sections with some entities
         score = (
@@ -354,19 +357,76 @@ def _temporal_strategy(
     tracker: DiversityTracker,
     rng: random.Random,
 ) -> List[PassageCandidate]:
-    """Find sections with dates, deadlines, or time-based info."""
-    scored = []
-    for ent in entities_map:
-        sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 15:
-            continue
-        score = len(ent.dates) * 3 + (1 if sec.has_dates else 0)
-        if score > 0:
-            scored.append((ent, score))
+    """Document-versioning strategy: find sections from DIFFERENT
+    documents that cover overlapping topics, so the question can
+    test which document is more recent / which version applies.
+    """
+    filenames = index.get_source_filenames()
+    if len(filenames) < 2:
+        # Fallback: single-doc temporal questions
+        scored = []
+        for ent in entities_map:
+            sec = ent.section
+            if tracker.is_used(sec) or sec.word_count() < 15:
+                continue
+            score = len(ent.dates) * 3 + (1 if sec.has_dates else 0)
+            if score > 0:
+                scored.append((ent, score))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        rng.shuffle(scored[:min(len(scored), count * 3)])
+        return _build_candidates(scored[:count * 2], count, tracker)
 
-    scored.sort(key=lambda x: x[1], reverse=True)
-    rng.shuffle(scored[:min(len(scored), count * 3)])
-    return _build_candidates(scored[:count * 2], count, tracker)
+    # Group entities by doc
+    by_doc = {}
+    for e in entities_map:
+        by_doc.setdefault(e.source_filename, []).append(e)
+
+    # Find cross-doc pairs with shared entities (overlapping topics)
+    candidates = []
+    fnames = list(by_doc.keys())
+    for i in range(len(fnames)):
+        for j in range(i + 1, len(fnames)):
+            for ea in by_doc[fnames[i]]:
+                if ea.section.word_count() < 15:
+                    continue
+                for eb in by_doc[fnames[j]]:
+                    if eb.section.word_count() < 15:
+                        continue
+                    shared = find_shared_entities(ea, eb)
+                    if shared:
+                        candidates.append((
+                            ea, eb, fnames[i], fnames[j],
+                            len(shared),
+                        ))
+
+    candidates.sort(key=lambda x: x[4], reverse=True)
+    rng.shuffle(candidates[:min(len(candidates), count * 3)])
+
+    results = []
+    for ea, eb, fname_a, fname_b, _ in candidates:
+        if len(results) >= count:
+            break
+        if tracker.is_used(ea.section) and tracker.is_used(eb.section):
+            continue
+        passage_a = _truncate_passage(ea.section.full_text, 800)
+        passage_b = _truncate_passage(eb.section.full_text, 800)
+        combined = f"{passage_a}\n\n---\n\n{passage_b}"
+
+        results.append(PassageCandidate(
+            passage=combined,
+            source_documents=[fname_a, fname_b],
+            chapter=ea.section.heading,
+            subchapters=[eb.section.heading],
+            page_start=ea.section.page_start,
+            page_end=eb.section.page_end,
+            section=ea.section,
+            section_b=eb.section,
+            source_b=fname_b,
+        ))
+        tracker.mark_used(ea.section, fname_a)
+        tracker.mark_used(eb.section, fname_b)
+
+    return results
 
 
 def _lists_extraction_strategy(
@@ -377,19 +437,77 @@ def _lists_extraction_strategy(
     tracker: DiversityTracker,
     rng: random.Random,
 ) -> List[PassageCandidate]:
-    """Find sections containing bullet or numbered lists."""
+    """Find sections containing bullet or numbered lists.
+
+    Prefers longer lists and enforces document diversity.
+    Uses all_text (including children) to capture complete lists.
+    """
     scored = []
     for ent in entities_map:
         sec = ent.section
         if tracker.is_used(sec) or sec.word_count() < 15:
             continue
         if sec.has_list:
-            score = sec.word_count()
+            # Use all_text length to prefer sections with
+            # complete lists (including child subsections)
+            full_len = len(sec.all_text.split())
+            score = full_len
             scored.append((ent, score))
 
     scored.sort(key=lambda x: x[1], reverse=True)
-    rng.shuffle(scored[:min(len(scored), count * 3)])
-    return _build_candidates(scored[:count * 2], count, tracker)
+    rng.shuffle(scored[:min(len(scored), count * 4)])
+
+    # Build candidates with doc-diversity enforcement
+    results = []
+    docs_used = {}
+    for ent, _ in scored:
+        if len(results) >= count:
+            break
+        sec = ent.section
+        if tracker.is_used(sec):
+            continue
+        fname = ent.source_filename
+        # Limit to ceil(count/num_docs) per doc to spread
+        num_docs = len({e.source_filename for e, _ in scored})
+        max_per_doc = max(1, -(-count // max(num_docs, 1)))
+        if docs_used.get(fname, 0) >= max_per_doc:
+            continue
+
+        # Use all_text to capture the complete list with children
+        passage = _truncate_passage(sec.all_text, 1500)
+        results.append(PassageCandidate(
+            passage=passage,
+            source_documents=[fname],
+            chapter=sec.heading,
+            subchapters=[c.heading for c in sec.children],
+            page_start=sec.page_start,
+            page_end=sec.page_end,
+            section=sec,
+        ))
+        tracker.mark_used(sec, fname)
+        docs_used[fname] = docs_used.get(fname, 0) + 1
+
+    # Backfill if diversity limit blocked us
+    if len(results) < count:
+        for ent, _ in scored:
+            if len(results) >= count:
+                break
+            sec = ent.section
+            if tracker.is_used(sec):
+                continue
+            passage = _truncate_passage(sec.all_text, 1500)
+            results.append(PassageCandidate(
+                passage=passage,
+                source_documents=[ent.source_filename],
+                chapter=sec.heading,
+                subchapters=[c.heading for c in sec.children],
+                page_start=sec.page_start,
+                page_end=sec.page_end,
+                section=sec,
+            ))
+            tracker.mark_used(sec, ent.source_filename)
+
+    return results
 
 
 def _hallucination_test_strategy(
@@ -539,6 +657,118 @@ def _truncate_passage(text: str, max_chars: int) -> str:
     return truncated
 
 
+def _is_boilerplate(sec: Section) -> bool:
+    """Detect boilerplate sections (copyright, addresses, footers)."""
+    text = sec.full_text.lower()
+    markers = [
+        "no part of this document may be reproduced",
+        "copyright", "©", "all rights reserved",
+        "donker curtiusstraat", "postbus",
+        "kvk", "btw", "iban",
+    ]
+    hits = sum(1 for m in markers if m in text)
+    # If heading is very short and content is mostly contact info
+    if hits >= 2:
+        return True
+    # Very short sections that look like footers
+    if sec.word_count() < 20 and hits >= 1:
+        return True
+    return False
+
+
+def _long_context_synthesis_strategy(
+    count: int,
+    index: SearchIndex,
+    entities_map: List[SectionEntities],
+    documents: List[Document],
+    tracker: DiversityTracker,
+    rng: random.Random,
+) -> List[PassageCandidate]:
+    """Provide large multi-section context spans for counting/
+    structural questions (e.g. 'how many roles mention X?').
+
+    Concatenates multiple sibling sections from the same document
+    into a single large passage.
+    """
+    results = []
+    used_starts = set()
+    for doc in documents:
+        if len(results) >= count:
+            break
+        top_sections = doc.sections
+        if len(top_sections) < 3:
+            continue
+        # Build spans of 4 consecutive sections with stride 4
+        span_size = min(4, len(top_sections))
+        for start_idx in range(0, len(top_sections) - 2, span_size):
+            if len(results) >= count:
+                break
+            if start_idx in used_starts:
+                continue
+            span = top_sections[start_idx:start_idx + span_size]
+            if len(span) < 2:
+                continue
+            # Concatenate all_text from each section in span
+            parts = []
+            for s in span:
+                parts.append(s.all_text)
+            combined = "\n\n".join(parts)
+            combined = _truncate_passage(combined, 3000)
+
+            results.append(PassageCandidate(
+                passage=combined,
+                source_documents=[doc.filename],
+                chapter=span[0].heading,
+                subchapters=[s.heading for s in span[1:]],
+                page_start=span[0].page_start,
+                page_end=span[-1].page_end,
+                section=span[0],
+            ))
+            used_starts.add(start_idx)
+            # Only mark first section to avoid blocking other types
+            tracker.mark_used(span[0], doc.filename)
+
+    return results
+
+
+def _pinpointing_strategy(
+    count: int,
+    index: SearchIndex,
+    entities_map: List[SectionEntities],
+    documents: List[Document],
+    tracker: DiversityTracker,
+    rng: random.Random,
+) -> List[PassageCandidate]:
+    """Select sections with specific, locatable facts for questions
+    that ask 'in which document / section can you find X?'.
+
+    Prefers sections with distinctive content (emails, phone
+    numbers, specific names) that can only be found in one place.
+    """
+    scored = []
+    for ent in entities_map:
+        sec = ent.section
+        if tracker.is_used(sec) or sec.word_count() < 15:
+            continue
+        if _is_boilerplate(sec):
+            continue
+        # Score by uniquely locatable content
+        score = (
+            len(ent.emails) * 4
+            + len(ent.phones) * 4
+            + len(ent.urls) * 3
+            + len(ent.defined_terms) * 2
+            + len(ent.money_amounts) * 2
+            + len(ent.numbers) * 1
+        )
+        if score > 0:
+            scored.append((ent, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    rng.shuffle(scored[:min(len(scored), count * 3)])
+    return _build_candidates(scored[:count * 2], count, tracker)
+
+
 # ── Strategy dispatch table ─────────────────────────────
 
 _STRATEGIES = {
@@ -551,8 +781,8 @@ _STRATEGIES = {
     QuestionType.TEMPORAL_QUESTIONS: _temporal_strategy,
     QuestionType.LISTS_EXTRACTION: _lists_extraction_strategy,
     QuestionType.HALLUCINATION_TEST: _hallucination_test_strategy,
-    QuestionType.PINPOINTING_QUOTING: _direct_lookup_strategy,
-    QuestionType.LONG_CONTEXT_SYNTHESIS: _paraphrase_lookup_strategy,
+    QuestionType.PINPOINTING_QUOTING: _pinpointing_strategy,
+    QuestionType.LONG_CONTEXT_SYNTHESIS: _long_context_synthesis_strategy,
     QuestionType.TABLES_EXTRACTION: _tables_extraction_strategy,
     QuestionType.CROSS_DOCUMENT_CONFLICT: _multi_hop_between_strategy,
     QuestionType.AMBIGUOUS_QUESTIONS: _paraphrase_lookup_strategy,

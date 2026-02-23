@@ -92,6 +92,9 @@ class Pipeline:
             f"in {index_time:.1f}s"
         )
 
+        # ── Build document metadata (dates) ─────────────
+        doc_metadata = self._extract_doc_metadata(documents)
+
         # ── Phase 2-4: Select → Generate → Validate ────
         print("\n[Phase 2-4] Generating questions...")
         tracker = DiversityTracker()
@@ -113,9 +116,15 @@ class Pipeline:
             )
 
             # Phase 2: Select passages
+            # Types with high rejection rates need more candidates
+            _HIGH_REJECT = {
+                QuestionType.HALLUCINATION_TEST,
+                QuestionType.LONG_CONTEXT_SYNTHESIS,
+            }
+            extra = 6 if qtype in _HIGH_REJECT else 2
             candidates = select_passages(
                 question_type=qtype,
-                count=qcfg.count + 2,  # extras for failures
+                count=qcfg.count + extra,  # extras for failures
                 index=index,
                 entities_map=entities_map,
                 documents=documents,
@@ -136,12 +145,20 @@ class Pipeline:
                 )
 
                 # Phase 3: LLM generates Q+A
+                # Pass doc_metadata for temporal/versioning
+                candidate_meta = None
+                if qtype == QuestionType.TEMPORAL_QUESTIONS:
+                    candidate_meta = {
+                        s: doc_metadata.get(s, {})
+                        for s in candidate.source_documents
+                    }
                 q_data = self.qa_gen.generate(
                     passage=candidate.passage,
                     source_documents=candidate.source_documents,
                     chapter=candidate.chapter,
                     question_type=qtype,
                     difficulty=qcfg.difficulty,
+                    doc_metadata=candidate_meta,
                 )
                 metrics["llm_calls"] += 1
 
@@ -164,6 +181,18 @@ class Pipeline:
                         f"{validation['reason']}"
                     )
                     continue
+
+                # Hallucination: verify topic isn't elsewhere
+                if qtype == QuestionType.HALLUCINATION_TEST:
+                    if self._hallucination_topic_exists(
+                        q_data["question"], index,
+                        candidate.passage,
+                    ):
+                        print(
+                            "      REJECTED: hallucination "
+                            "topic found elsewhere in corpus"
+                        )
+                        continue
 
                 # Build question record
                 idx = len(all_questions) + len(type_questions)
@@ -208,6 +237,15 @@ class Pipeline:
                         ),
                     },
                 }
+
+                # Multi-turn followup: add turn_2 fields
+                if qtype == QuestionType.MULTI_TURN_FOLLOWUP:
+                    question_record["question_turn_2"] = (
+                        q_data.get("question_turn_2", "")
+                    )
+                    question_record["answer_turn_2"] = (
+                        q_data.get("answer_turn_2", "")
+                    )
 
                 type_questions.append(question_record)
                 tracker.mark_used(
@@ -312,6 +350,98 @@ class Pipeline:
             entities = extract_entities(sec, fname)
             entities_map.append(entities)
         return entities_map
+
+    def _extract_doc_metadata(
+        self, documents: List[Document]
+    ) -> Dict[str, Dict[str, str]]:
+        """Extract file-level metadata (dates) for each document.
+
+        Tries PDF metadata first, then falls back to filesystem
+        modification time.  Used by temporal/versioning questions.
+        """
+        import re as _re
+        path = Path(self.config.input_documents_path)
+        meta = {}
+        for doc in documents:
+            info: Dict[str, str] = {}
+            # Try to find the file on disk
+            for fpath in path.rglob("*"):
+                if fpath.name == doc.filename:
+                    # Filesystem modified time
+                    mtime = datetime.fromtimestamp(
+                        fpath.stat().st_mtime
+                    )
+                    info["modified"] = mtime.strftime(
+                        "%Y-%m-%d"
+                    )
+                    # Try extracting date from filename
+                    m = _re.search(
+                        r"(20\d{2})", doc.filename
+                    )
+                    if m:
+                        info["year_in_name"] = m.group(1)
+                    break
+            meta[doc.filename] = info
+        return meta
+
+    def _hallucination_topic_exists(
+        self,
+        question: str,
+        index: SearchIndex,
+        source_passage: str,
+    ) -> bool:
+        """Check if the hallucination question's topic appears
+        elsewhere in the corpus (outside the source passage).
+
+        Uses BM25 search to find potential matches.  Only rejects
+        when a *clearly different* section scores high AND contains
+        multiple topic-specific keywords from the question.
+        """
+        import re as _re
+        # Extract topic-specific nouns (>= 6 chars, skip stopwords)
+        q_norm = _re.sub(r"[^\w\s]", " ", question.lower())
+        stopwords = {
+            "welke", "welk", "wanneer", "waarom", "hoeveel",
+            "welken", "wordt", "worden", "heeft", "hebben",
+            "kunnen", "volgens", "hierbij", "hiervan", "daarbij",
+            "daarvan", "medewerker", "medewerkers", "binnen",
+            "beleid", "regeling", "informatie", "document",
+            "richtlijn", "organisatie", "datasciencelab",
+        }
+        keywords = [
+            w for w in q_norm.split()
+            if len(w) >= 6 and w not in stopwords
+        ]
+        if len(keywords) < 2:
+            return False
+
+        query = " ".join(keywords[:5])
+        results = index.search(query, top_k=3)
+
+        # Check if any top result is clearly from a DIFFERENT section
+        src_norm = _re.sub(
+            r"\s+", " ", source_passage.lower()[:300]
+        )
+        src_words = set(src_norm.split())
+        for sec, fname, score in results:
+            if score < 3.0:
+                continue
+            sec_text = sec.full_text.lower()
+            sec_norm = _re.sub(r"\s+", " ", sec_text[:300])
+            sec_words = set(sec_norm.split())
+            # Must be a genuinely different section
+            overlap = len(src_words & sec_words)
+            total = max(len(sec_words), 1)
+            if overlap / total > 0.5:
+                continue  # same/very similar section, skip
+            # Count how many topic keywords appear in this section
+            kw_hits = sum(
+                1 for kw in keywords if kw in sec_text
+            )
+            if kw_hits >= 2:
+                return True
+
+        return False
 
     def _save(self, test_set: Dict[str, Any]) -> str:
         """Save test set to the configured output path."""

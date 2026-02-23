@@ -69,6 +69,8 @@ class Validator:
             QuestionType.ADVERSARIAL_AGGRO,
             QuestionType.PROMPT_INJECTION,
             QuestionType.TOOL_CALL_CHECK,
+            QuestionType.TEMPORAL_QUESTIONS,
+            QuestionType.LONG_CONTEXT_SYNTHESIS,
         }
         answer = q_data.get("answer", "")
         if question_type in _SKIP_GROUNDING:
