@@ -1,5 +1,6 @@
 # MLflow
 mlflow.db
+*.db
 mlruns/
 
 # Byte-compiled / optimized / DLL files
@@ -212,6 +213,3 @@ __marimo__/
 
 # Data folder
 data/
-
-# Allow test sets for inspection
-!data/test_sets/
