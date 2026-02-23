@@ -25,11 +25,11 @@ flowchart TD
     E --> F[Phase 2: Select Passages]
     F --> F1{Per-Type Strategy}
     F1 -->|direct_lookup| F2[Factual density scoring]
-    F1 -->|temporal| F3[Date/duration density]
-    F1 -->|multi_hop_between| F4[Cross-document pairs]
+    F1 -->|temporal| F3[Cross-doc versioning pairs]
+    F1 -->|multi_hop_between| F4[Cross-document pairs\nmeaningful shared entities]
     F1 -->|hallucination_test| F5[Random diverse sections]
-    F1 -->|tables_extraction| F6[Table/number-dense sections]
-    F1 -->|...| F7[12 more strategies]
+    F1 -->|long_context_synthesis| F6[Multi-section spans\nsection-aware assembly]
+    F1 -->|...| F7[10 more strategies]
     F2 & F3 & F4 & F5 & F6 & F7 --> G[Candidate Passages\nranked · diversity-tracked]
 
     G --> H[Phase 3: Generate Q&A]
@@ -41,9 +41,11 @@ flowchart TD
     I1 -->|< 30% match| X1[❌ Reject]
     I1 -->|≥ 30% match| I2{Is ToC region?}
     I2 -->|yes| X2[❌ Reject]
-    I2 -->|no| I3{Answer grounded?\nskip for hallucination/adversarial/\ninjection/tool_call}
+    I2 -->|no| I3{Answer grounded?\nskip for hallucination/adversarial/\ninjection/temporal/long_context}
     I3 -->|no| X3[❌ Reject]
-    I3 -->|yes| I4{Context ≥ 30 chars?}
+    I3 -->|yes| I3b{Hallucination BM25\ncorpus-wide check}
+    I3b -->|topic found elsewhere| X3b[❌ Reject]
+    I3b -->|ok| I4{Context ≥ 30 chars?}
     I4 -->|no| X4[❌ Reject]
     I4 -->|yes| I5{Multi-hop from\ndifferent docs?}
     I5 -->|same doc| X5[❌ Reject]
@@ -81,21 +83,27 @@ flowchart TD
 | Strategy Dispatcher | `selection/strategies.py` | Routes each question type to a specialized selection strategy |
 | Diversity Tracker | `selection/diversity.py` | Prevents reuse of sections/headings across question types |
 
-Each of the 20 question types has a dedicated or shared strategy:
+Each of the 15 enabled question types has a dedicated or shared strategy:
 
 | Strategy | Used By | Selection Logic |
 |---|---|---|
-| `_direct_lookup_strategy` | direct_lookup, pinpointing_quoting, tool_call_check | Scores by factual entity density (numbers, money, dates, contacts) |
-| `_paraphrase_lookup_strategy` | paraphrase_lookup, long_context_synthesis, ambiguous_questions, multi_turn_followup | Prefers longer descriptive sections with definitions |
+| `_direct_lookup_strategy` | direct_lookup | Scores by factual entity density (numbers, money, dates, contacts) |
+| `_paraphrase_lookup_strategy` | paraphrase_lookup, ambiguous_questions, multi_turn_followup | Prefers longer descriptive sections with definitions; skips boilerplate |
 | `_specific_jargon_strategy` | specific_jargon | Targets sections with defined terms and abbreviations |
 | `_multi_hop_within_strategy` | multi_hop_within_corpus | Pairs sections within the same doc; enforces document diversity |
-| `_multi_hop_between_strategy` | multi_hop_between_documents, cross_document_conflict | Pairs sections from different documents using shared entities |
+| `_multi_hop_between_strategy` | multi_hop_between_documents | Pairs sections from different documents using `_meaningful_shared` entities (filters corpus-common terms via `_COMMON_ENTITIES` stop-list) |
 | `_needle_in_haystack_strategy` | needle_in_haystack | Finds low-density entity sections (hidden details) |
-| `_temporal_strategy` | temporal_questions | Scores by date/duration count |
-| `_lists_extraction_strategy` | lists_extraction | Sections with bullet/numbered lists |
-| `_tables_extraction_strategy` | tables_extraction | Sections with `has_table`; falls back to number-dense sections |
+| `_temporal_strategy` | temporal_questions | Cross-doc versioning: pairs sections from different documents with overlapping topics using `_meaningful_shared`; single-doc fallback scores by date density |
+| `_lists_extraction_strategy` | lists_extraction | Sections with bullet/numbered lists; prefers longer lists, enforces doc diversity, uses `all_text` for complete list context |
 | `_hallucination_test_strategy` | hallucination_test | Random diverse sections (context for unanswerable Qs) |
-| `_generic_strategy` | adversarial_aggro, prompt_injection, access_control, infographic_extraction | Content-rich sections by word count + entity count |
+| `_long_context_synthesis_strategy` | long_context_synthesis | Multi-section spans (4 consecutive sections) with section-aware assembly — only includes complete sections within a 4000-char budget to avoid mid-section truncation |
+| `_pinpointing_strategy` | pinpointing_quoting | Ensures document name + section heading info is rich for source-location questions |
+| `_generic_strategy` | adversarial_aggro, prompt_injection | Content-rich sections by word count + entity count; filters boilerplate via `_is_boilerplate` |
+
+**Helpers:**
+- `_meaningful_shared(ea, eb)` — returns shared entities minus corpus-common stop words (`_COMMON_ENTITIES`: DSL, Medewerker, Directie, etc.)
+- `_is_boilerplate(sec)` — detects copyright, address, footer sections
+- Section-aware assembly — replaces truncate-then-concat to prevent factually wrong golden answers
 
 ### Phase 3 — Generate Q&A
 
@@ -111,7 +119,8 @@ Each of the 20 question types has a dedicated or shared strategy:
 |---|---|---|
 | Context match | ≥30% of passage found verbatim in source documents | — |
 | ToC detection | Rejects table-of-contents regions | — |
-| Answer grounding | Answer keywords present in passage (≥25%) | hallucination_test, adversarial_aggro, prompt_injection, tool_call_check |
+| Answer grounding | Answer keywords present in passage (≥25%) | hallucination_test, adversarial_aggro, prompt_injection, temporal_questions, long_context_synthesis |
+| Hallucination BM25 | Corpus-wide check that hallucination topic doesn't exist elsewhere (score ≥3.0, ≥2 keywords, non-overlap ≥0.5) | Only for hallucination_test |
 | Context length | ≥30 characters | — |
 | Multi-hop diversity | Cross-doc excerpts must come from different documents | — |
 
@@ -122,30 +131,37 @@ Each of the 20 question types has a dedicated or shared strategy:
 
 ---
 
-## Question Types (20)
+## Question Types (15 enabled / 20 defined)
+
+### Enabled
 
 | # | Type | Difficulty | Description |
 |---|---|---|---|
 | 1 | `direct_lookup` | easy | Exact fact retrieval |
-| 2 | `paraphrase_lookup` | medium | Rephrased fact retrieval |
-| 3 | `specific_jargon` | medium | Domain term definitions |
+| 2 | `paraphrase_lookup` | medium | Rephrased fact retrieval (boilerplate-filtered) |
+| 3 | `specific_jargon` | medium | Domain term definitions (single-sentence enforced) |
 | 4 | `multi_hop_within_corpus` | hard | Combine info from same document |
-| 5 | `multi_hop_between_documents` | hard | Combine info across documents |
-| 6 | `cross_document_conflict` | hard | Find contradictions between docs |
-| 7 | `temporal_questions` | medium | Date/deadline/duration questions |
-| 8 | `pinpointing_quoting` | medium | Exact quote or location |
-| 9 | `long_context_synthesis` | hard | Summarize spread-out information |
-| 10 | `needle_in_haystack` | hard | Find hidden details |
-| 11 | `ambiguous_questions` | medium | Intentionally vague wording |
-| 12 | `tool_call_check` | hard | Calculation/computation from data |
-| 13 | `tables_extraction` | medium | Data from tabular content |
-| 14 | `lists_extraction` | easy | Items from bullet/numbered lists |
-| 15 | `infographic_extraction` | medium | Visual element interpretation |
-| 16 | `hallucination_test` | medium | Unanswerable from context |
-| 17 | `adversarial_aggro` | hard | Aggressive tone handling |
-| 18 | `prompt_injection` | hard | Jailbreak attempt resistance |
-| 19 | `multi_turn_followup` | medium | Conversational memory test |
-| 20 | `access_control` | hard | Permission-based access |
+| 5 | `multi_hop_between_documents` | hard | Combine info across documents (meaningful entity pairing) |
+| 6 | `temporal_questions` | medium | Document versioning — which doc is more recent? (no dates in question, varied angles) |
+| 7 | `pinpointing_quoting` | medium | Source location identification (document + section + page) |
+| 8 | `long_context_synthesis` | hard | Structural/counting questions across multi-section spans |
+| 9 | `needle_in_haystack` | hard | Find hidden details in long sections |
+| 10 | `ambiguous_questions` | medium | Intentionally vague wording |
+| 11 | `lists_extraction` | easy | Items from bullet/numbered lists |
+| 12 | `hallucination_test` | medium | Unanswerable from context (BM25 corpus-wide validated) |
+| 13 | `adversarial_aggro` | hard | Aggressive tone handling with de-escalation |
+| 14 | `prompt_injection` | hard | Jailbreak attempt resistance (refusal prefix mandatory) |
+| 15 | `multi_turn_followup` | medium | Conversational memory test (4-field JSON, pronoun dependency) |
+
+### Disabled
+
+| Type | Reason |
+|---|---|
+| `tables_extraction` | PDF table parsing unreliable |
+| `infographic_extraction` | No visual element support |
+| `access_control` | Not applicable to current corpus |
+| `tool_call_check` | No computation-worthy data in corpus |
+| `cross_document_conflict` | Rarely produces genuine conflicts; overlaps with temporal_questions |
 
 ---
 
@@ -167,7 +183,7 @@ QUESTION_TYPES = {
 ## Running
 
 ```bash
-python v2_test_set_creation/main.py
+python -m v2_test_set_creation.main
 ```
 
 Requires:
