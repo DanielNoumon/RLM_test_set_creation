@@ -6,7 +6,7 @@ candidate passages, then returns them ranked by suitability.
 No LLM calls — pure Python logic.
 """
 import random
-from typing import List, Tuple, Optional
+from typing import List, Set, Tuple, Optional
 from dataclasses import dataclass
 
 from ..config import QuestionType
@@ -16,6 +16,25 @@ from ..indexing.entity_extractor import (
     SectionEntities, find_shared_entities,
 )
 from .diversity import DiversityTracker
+
+
+# Corpus-common entities that appear in nearly every section
+# and should not count as meaningful thematic overlap.
+_COMMON_ENTITIES = {
+    "DSL", "Data Science Lab", "People Ops",
+    "Medewerker", "Medewerkers", "Directie",
+    "Leidinggevende", "Manager", "Werkgever",
+    "Amsterdam", "Nederland",
+}
+_COMMON_LOWER = {e.lower() for e in _COMMON_ENTITIES}
+
+
+def _meaningful_shared(
+    ea: SectionEntities, eb: SectionEntities,
+) -> Set[str]:
+    """Return shared entities minus corpus-common stop words."""
+    shared = find_shared_entities(ea, eb)
+    return {e for e in shared if e.lower() not in _COMMON_LOWER}
 
 
 @dataclass
@@ -281,7 +300,7 @@ def _multi_hop_between_strategy(
                 for eb in by_doc[fnames[j]]:
                     if eb.section.word_count() < 15:
                         continue
-                    shared = find_shared_entities(ea, eb)
+                    shared = _meaningful_shared(ea, eb)
                     if shared:
                         candidates.append((
                             ea, eb,
@@ -392,7 +411,7 @@ def _temporal_strategy(
                 for eb in by_doc[fnames[j]]:
                     if eb.section.word_count() < 15:
                         continue
-                    shared = find_shared_entities(ea, eb)
+                    shared = _meaningful_shared(ea, eb)
                     if shared:
                         candidates.append((
                             ea, eb, fnames[i], fnames[j],
@@ -596,6 +615,8 @@ def _generic_strategy(
         sec = ent.section
         if tracker.is_used(sec) or sec.word_count() < 15:
             continue
+        if _is_boilerplate(sec):
+            continue
         score = (
             min(sec.word_count(), 200) / 50
             + ent.entity_count * 0.5
@@ -708,21 +729,33 @@ def _long_context_synthesis_strategy(
             span = top_sections[start_idx:start_idx + span_size]
             if len(span) < 2:
                 continue
-            # Concatenate all_text from each section in span
+            # Section-aware assembly: only include COMPLETE sections
+            # that fit within the char budget to avoid truncating
+            # mid-content (which causes factually wrong golden answers).
+            max_chars = 4000
             parts = []
+            included = []
+            total_chars = 0
             for s in span:
-                parts.append(s.all_text)
+                text = s.all_text
+                needed = len(text) + (2 if parts else 0)  # \n\n
+                if total_chars + needed > max_chars and parts:
+                    break
+                parts.append(text)
+                included.append(s)
+                total_chars += needed
+            if len(included) < 2:
+                continue
             combined = "\n\n".join(parts)
-            combined = _truncate_passage(combined, 3000)
 
             results.append(PassageCandidate(
                 passage=combined,
                 source_documents=[doc.filename],
-                chapter=span[0].heading,
-                subchapters=[s.heading for s in span[1:]],
-                page_start=span[0].page_start,
-                page_end=span[-1].page_end,
-                section=span[0],
+                chapter=included[0].heading,
+                subchapters=[s.heading for s in included[1:]],
+                page_start=included[0].page_start,
+                page_end=included[-1].page_end,
+                section=included[0],
             ))
             used_starts.add(start_idx)
             # Only mark first section to avoid blocking other types
