@@ -330,64 +330,64 @@ if __name__ == "__main__":
     # -- Question types to generate --
     # Set enabled=False or remove a type to disable it.
     QUESTION_TYPES = {
-        QuestionType.DIRECT_LOOKUP: QuestionConfig(
+        QuestionType.DIRECT_LOOKUP: QuestionConfig(  # Exact fact retrieval ("what is X?")
             enabled=True, count=3, difficulty="easy"
         ),
-        QuestionType.PARAPHRASE_LOOKUP: QuestionConfig(
+        QuestionType.PARAPHRASE_LOOKUP: QuestionConfig(  # Same fact, rephrased question
             enabled=True, count=3, difficulty="medium"
         ),
-        QuestionType.SPECIFIC_JARGON: QuestionConfig(
+        QuestionType.SPECIFIC_JARGON: QuestionConfig(  # Domain-specific terms and definitions
             enabled=True, count=3, difficulty="medium"
         ),
-        QuestionType.MULTI_HOP_WITHIN_CORPUS: QuestionConfig(
+        QuestionType.MULTI_HOP_WITHIN_CORPUS: QuestionConfig(  # Combines info from 2 sections in same doc
             enabled=True, count=3, difficulty="hard"
         ),
-        QuestionType.MULTI_HOP_BETWEEN_DOCUMENTS: QuestionConfig(
+        QuestionType.MULTI_HOP_BETWEEN_DOCUMENTS: QuestionConfig(  # Combines info across different docs
             enabled=True, count=3, difficulty="hard"
         ),
-        # QuestionType.CROSS_DOCUMENT_CONFLICT: QuestionConfig(
+        # QuestionType.CROSS_DOCUMENT_CONFLICT: QuestionConfig(  # Contradictions between docs
         #     enabled=True, count=3, difficulty="hard"
         # ),
-        QuestionType.TEMPORAL_QUESTIONS: QuestionConfig(
+        QuestionType.TEMPORAL_QUESTIONS: QuestionConfig(  # Version/date-aware questions across docs
             enabled=True, count=3, difficulty="medium"
         ),
-        QuestionType.NEEDLE_IN_HAYSTACK: QuestionConfig(
+        QuestionType.NEEDLE_IN_HAYSTACK: QuestionConfig(  # Find a small detail in a long section
             enabled=True, count=3, difficulty="hard"
         ),
-        QuestionType.LISTS_EXTRACTION: QuestionConfig(
+        QuestionType.LISTS_EXTRACTION: QuestionConfig(  # Extract items from bullet/numbered lists
             enabled=True, count=3, difficulty="easy"
         ),
-        QuestionType.HALLUCINATION_TEST: QuestionConfig(
+        QuestionType.HALLUCINATION_TEST: QuestionConfig(  # Q about topics NOT in the corpus
             enabled=True, count=3, difficulty="medium"
         ),
-        QuestionType.ADVERSARIAL_AGGRO: QuestionConfig(
+        QuestionType.ADVERSARIAL_AGGRO: QuestionConfig(  # Aggressive/rude user tone
             enabled=True, count=3, difficulty="hard"
         ),
-        QuestionType.PROMPT_INJECTION: QuestionConfig(
+        QuestionType.PROMPT_INJECTION: QuestionConfig(  # Attempts to override system instructions
             enabled=True, count=3, difficulty="hard"
         ),
-        QuestionType.PINPOINTING_QUOTING: QuestionConfig(
+        QuestionType.PINPOINTING_QUOTING: QuestionConfig(  # "In which doc/section is X mentioned?"
             enabled=True, count=3, difficulty="medium"
         ),
-        QuestionType.LONG_CONTEXT_SYNTHESIS: QuestionConfig(
+        QuestionType.LONG_CONTEXT_SYNTHESIS: QuestionConfig(  # Counting/summarizing across many sections
             enabled=True, count=3, difficulty="hard"
         ),
-        QuestionType.AMBIGUOUS_QUESTIONS: QuestionConfig(
+        QuestionType.AMBIGUOUS_QUESTIONS: QuestionConfig(  # Vague questions needing clarification
             enabled=True, count=3, difficulty="medium"
         ),
-        # QuestionType.TOOL_CALL_CHECK: QuestionConfig(
+        # QuestionType.TOOL_CALL_CHECK: QuestionConfig(  # Tests tool/function calling ability
         #     enabled=True, count=3, difficulty="hard"
         # ),
-        # QuestionType.TABLES_EXTRACTION: QuestionConfig(
+        # QuestionType.TABLES_EXTRACTION: QuestionConfig(  # Extract data from tables
         #     enabled=True, count=3, difficulty="medium"
         # ),
-        # QuestionType.INFOGRAPHIC_EXTRACTION: QuestionConfig(
+        # QuestionType.INFOGRAPHIC_EXTRACTION: QuestionConfig(  # Extract data from images
         #     enabled=True, count=3, difficulty="medium"
         # ),
-        QuestionType.MULTI_TURN_FOLLOWUP: QuestionConfig(
+        QuestionType.MULTI_TURN_FOLLOWUP: QuestionConfig(  # Two-turn conversation with follow-up
             enabled=True, count=3, difficulty="medium"
         ),
-        # QuestionType.ACCESS_CONTROL: QuestionConfig(
+        # QuestionType.ACCESS_CONTROL: QuestionConfig(  # Tests role-based access boundaries
         #     enabled=True, count=3, difficulty="hard"
         # ),
     }
