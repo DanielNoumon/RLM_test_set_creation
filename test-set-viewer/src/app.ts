@@ -38,12 +38,40 @@ interface TestSetConfig {
   total_questions: number;
 }
 
+interface Summary {
+  total_questions: number;
+  total_requested: number;
+  yield_ratio: number;
+  llm_calls: number;
+  llm_efficiency: number;
+  enabled_types: number;
+  timings: {
+    total_seconds: number;
+    parse_seconds: number;
+    index_seconds: number;
+    avg_per_question_seconds: number;
+  };
+  quality: {
+    avg_context_match: number;
+    min_context_match: number;
+    answer_grounded_ratio: number;
+    duplicate_questions: number;
+  };
+  context_stats: { min_chars: number; max_chars: number; avg_chars: number };
+  answer_stats: { min_chars: number; max_chars: number; avg_chars: number };
+  difficulty_distribution: Record<string, number>;
+  questions_by_type: Record<string, number>;
+  source_documents: Record<string, number>;
+  multi_source_questions: number;
+}
+
 interface TestSetData {
   metadata: {
     created_at: number;
     config: TestSetConfig;
     metrics: TestSetMetrics;
   };
+  summary?: Summary;
   questions: Question[];
 }
 
@@ -71,6 +99,8 @@ const resultCount = document.getElementById("result-count")!;
 const tableContainer = document.getElementById("table-container")!;
 const tbody = document.getElementById("questions-tbody")!;
 const emptyState = document.getElementById("empty-state")!;
+const summaryToggle = document.getElementById("summary-toggle")!;
+const summaryPanel = document.getElementById("summary-panel")!;
 const modalOverlay = document.getElementById("modal-overlay")!;
 const modalTitle = document.getElementById("modal-title")!;
 const modalBody = document.getElementById("modal-body")!;
@@ -106,10 +136,14 @@ function initViewer(): void {
   if (!testSetData) return;
 
   renderMetadata();
+  renderSummary();
   populateTypeFilter();
   renderTable(testSetData.questions);
 
   metadataPanel.classList.remove("hidden");
+  if (testSetData.summary) {
+    summaryToggle.classList.remove("hidden");
+  }
   controlsSection.classList.remove("hidden");
   tableContainer.classList.remove("hidden");
   emptyState.classList.add("hidden");
@@ -158,6 +192,99 @@ function formatDate(date: Date): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// ========================================
+// Summary panel
+// ========================================
+
+summaryToggle.addEventListener("click", () => {
+  const isOpen = !summaryPanel.classList.contains("hidden");
+  summaryPanel.classList.toggle("hidden");
+  const chevron = summaryToggle.querySelector(".chevron");
+  if (chevron) chevron.textContent = isOpen ? "▸" : "▾";
+});
+
+function renderSummary(): void {
+  if (!testSetData?.summary) return;
+  const s = testSetData.summary;
+
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+
+  // --- Top-level KPI cards ---
+  const kpis = [
+    { label: "Questions", value: `${s.total_questions} / ${s.total_requested}` },
+    { label: "Yield", value: pct(s.yield_ratio) },
+    { label: "LLM Calls", value: String(s.llm_calls) },
+    { label: "LLM Efficiency", value: pct(s.llm_efficiency) },
+    { label: "Enabled Types", value: String(s.enabled_types) },
+    { label: "Total Time", value: `${s.timings.total_seconds}s` },
+    { label: "Avg / Question", value: `${s.timings.avg_per_question_seconds}s` },
+  ];
+
+  // --- Quality ---
+  const qualityRows = [
+    { label: "Avg Context Match", value: pct(s.quality.avg_context_match) },
+    { label: "Min Context Match", value: pct(s.quality.min_context_match) },
+    { label: "Answer Grounded", value: pct(s.quality.answer_grounded_ratio) },
+    { label: "Duplicate Questions", value: String(s.quality.duplicate_questions) },
+  ];
+
+  // --- Stats ---
+  const statsRows = [
+    { label: "Context (chars)", value: `${s.context_stats.min_chars} – ${s.context_stats.max_chars} (avg ${s.context_stats.avg_chars})` },
+    { label: "Answer (chars)", value: `${s.answer_stats.min_chars} – ${s.answer_stats.max_chars} (avg ${s.answer_stats.avg_chars})` },
+    { label: "Multi-source Questions", value: String(s.multi_source_questions) },
+    { label: "Parse Time", value: `${s.timings.parse_seconds}s` },
+    { label: "Index Time", value: `${s.timings.index_seconds}s` },
+  ];
+
+  // --- Build HTML ---
+  const kpiHtml = kpis.map(k => `
+    <div class="summary-kpi">
+      <span class="summary-kpi-value">${k.value}</span>
+      <span class="summary-kpi-label">${k.label}</span>
+    </div>
+  `).join("");
+
+  const tableHtml = (rows: {label: string; value: string}[]) => rows.map(r => `
+    <tr><td class="summary-row-label">${r.label}</td><td class="summary-row-value">${r.value}</td></tr>
+  `).join("");
+
+  const distHtml = (record: Record<string, number>) =>
+    Object.entries(record).map(([k, v]) => `
+      <div class="summary-dist-item">
+        <span class="summary-dist-label">${formatTypeName(k)}</span>
+        <span class="summary-dist-value">${v}</span>
+      </div>
+    `).join("");
+
+  summaryPanel.innerHTML = `
+    <div class="summary-kpis">${kpiHtml}</div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <h4>Quality</h4>
+        <table class="summary-table">${tableHtml(qualityRows)}</table>
+      </div>
+      <div class="summary-card">
+        <h4>Statistics</h4>
+        <table class="summary-table">${tableHtml(statsRows)}</table>
+      </div>
+      <div class="summary-card">
+        <h4>Difficulty Distribution</h4>
+        <div class="summary-dist">${distHtml(s.difficulty_distribution)}</div>
+      </div>
+      <div class="summary-card">
+        <h4>Questions by Type</h4>
+        <div class="summary-dist">${distHtml(s.questions_by_type)}</div>
+      </div>
+      <div class="summary-card">
+        <h4>Source Documents</h4>
+        <div class="summary-dist">${distHtml(s.source_documents)}</div>
+      </div>
+    </div>
+  `;
 }
 
 // ========================================
