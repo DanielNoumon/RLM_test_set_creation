@@ -275,6 +275,9 @@ class Pipeline:
         metrics["total_questions"] = len(all_questions)
 
         # ── Build test set ──────────────────────────────
+        summary = self._build_summary(
+            all_questions, metrics, total_q, enabled,
+        )
         test_set = {
             "metadata": {
                 "created_at": time.time(),
@@ -289,6 +292,7 @@ class Pipeline:
                 },
                 "metrics": metrics,
             },
+            "summary": summary,
             "questions": all_questions,
         }
 
@@ -445,6 +449,133 @@ class Pipeline:
                 return True
 
         return False
+
+    def _build_summary(
+        self,
+        questions: List[Dict[str, Any]],
+        metrics: Dict[str, Any],
+        total_requested: int,
+        enabled: List[QuestionType],
+    ) -> Dict[str, Any]:
+        """Build a high-level summary for front-end display."""
+        from collections import Counter
+
+        total = len(questions)
+        llm_calls = metrics.get("llm_calls", 0)
+
+        # Context and answer statistics
+        ctx_lens = [
+            len(q.get("golden_context", ""))
+            for q in questions
+        ]
+        ans_lens = [
+            len(q.get("golden_answer", ""))
+            for q in questions
+        ]
+
+        # Context match ratios from per-question metadata
+        match_ratios = [
+            q.get("metadata", {}).get(
+                "context_match_ratio", 0
+            )
+            for q in questions
+        ]
+        grounded = sum(
+            1 for q in questions
+            if q.get("metadata", {}).get(
+                "answer_grounded", False
+            )
+        )
+
+        # Source document distribution
+        src_counter: Counter = Counter()
+        multi_src = 0
+        for q in questions:
+            srcs = q.get("source_documents", [])
+            src_counter.update(srcs)
+            if len(srcs) > 1:
+                multi_src += 1
+
+        # Difficulty distribution
+        diff_counter = Counter(
+            q.get("difficulty", "unknown")
+            for q in questions
+        )
+
+        # Questions by type (with counts)
+        type_counter = Counter(
+            q.get("type", "unknown") for q in questions
+        )
+
+        return {
+            "total_questions": total,
+            "total_requested": total_requested,
+            "yield_ratio": (
+                round(total / total_requested, 2)
+                if total_requested else 0
+            ),
+            "llm_calls": llm_calls,
+            "llm_efficiency": (
+                round(total / llm_calls, 2)
+                if llm_calls else 0
+            ),
+            "enabled_types": len(enabled),
+            "timings": {
+                "total_seconds": round(
+                    metrics.get("generation_time", 0), 1
+                ),
+                "parse_seconds": round(
+                    metrics.get("parse_time", 0), 2
+                ),
+                "index_seconds": round(
+                    metrics.get("index_time", 0), 2
+                ),
+                "avg_per_question_seconds": round(
+                    metrics.get("generation_time", 0)
+                    / max(total, 1), 1
+                ),
+            },
+            "quality": {
+                "avg_context_match": round(
+                    sum(match_ratios) / max(len(match_ratios), 1), 3
+                ),
+                "min_context_match": round(
+                    min(match_ratios) if match_ratios else 0, 3
+                ),
+                "answer_grounded_ratio": round(
+                    grounded / max(total, 1), 3
+                ),
+                "duplicate_questions": (
+                    total - len(set(
+                        q["question"] for q in questions
+                    ))
+                ),
+            },
+            "context_stats": {
+                "min_chars": min(ctx_lens) if ctx_lens else 0,
+                "max_chars": max(ctx_lens) if ctx_lens else 0,
+                "avg_chars": round(
+                    sum(ctx_lens) / max(len(ctx_lens), 1)
+                ),
+            },
+            "answer_stats": {
+                "min_chars": min(ans_lens) if ans_lens else 0,
+                "max_chars": max(ans_lens) if ans_lens else 0,
+                "avg_chars": round(
+                    sum(ans_lens) / max(len(ans_lens), 1)
+                ),
+            },
+            "difficulty_distribution": dict(
+                diff_counter.most_common()
+            ),
+            "questions_by_type": dict(
+                type_counter.most_common()
+            ),
+            "source_documents": dict(
+                src_counter.most_common()
+            ),
+            "multi_source_questions": multi_src,
+        }
 
     def _save(self, test_set: Dict[str, Any]) -> str:
         """Save test set to the configured output path."""

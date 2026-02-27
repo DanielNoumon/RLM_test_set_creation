@@ -307,8 +307,8 @@ if __name__ == "__main__":
 
     # -- Naming / paths --
     CORPUS_NAME = "DSL_corpus"  # Label used in output filenames and MLflow
-    INPUT_PATH = None  # Input PDFs/TXT/MD folder (None = data/files_for_test_set)
-    OUTPUT_PATH = None  # Output folder for test-set JSONs (None = data/test_sets)
+    INPUT_PATH = "data/files_for_test_set"  # Input PDFs/TXT/MD folder
+    OUTPUT_PATH = "data/test_sets"  # Output folder for test-set JSONs
 
     # -- Selection thresholds (control which document sections qualify as passages) --
     MIN_SECTION_WORDS = 15  # Min words for a section to be a passage candidate
