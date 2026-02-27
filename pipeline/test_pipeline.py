@@ -6,12 +6,12 @@ _THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS_DIR.parent))
 
 import random
-from v2_test_set_creation.parsing.pdf_parser import parse_pdf
-from v2_test_set_creation.indexing.search_index import SearchIndex
-from v2_test_set_creation.indexing.entity_extractor import extract_entities
-from v2_test_set_creation.selection.strategies import select_passages
-from v2_test_set_creation.selection.diversity import DiversityTracker
-from v2_test_set_creation.config import QuestionType
+from pipeline.parsing.pdf_parser import parse_pdf
+from pipeline.indexing.search_index import SearchIndex
+from pipeline.indexing.entity_extractor import extract_entities
+from pipeline.selection.strategies import select_passages
+from pipeline.selection.diversity import DiversityTracker
+from pipeline.config import QuestionType
 
 DATA = "data/files_for_test_set"
 

@@ -183,7 +183,7 @@ QUESTION_TYPES = {
 ## Running
 
 ```bash
-python -m v2_test_set_creation.main
+python -m pipeline.main
 ```
 
 Requires:

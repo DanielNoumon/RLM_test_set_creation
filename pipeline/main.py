@@ -19,19 +19,19 @@ from datetime import datetime
 from dotenv import load_dotenv
 import mlflow
 
-from v2_test_set_creation.config import (
+from pipeline.config import (
     TestSetConfig, LLMConfig, QuestionType, QuestionConfig,
 )
-from v2_test_set_creation.pipeline import Pipeline
+from pipeline.pipeline import Pipeline
 
 # Load environment variables
 load_dotenv()
 
 # Configure MLflow tracking
 mlflow.openai.autolog()
-mlflow_db = _THIS_DIR / "mlflow_v2.db"
+mlflow_db = _THIS_DIR.parent / "mlflow.db"
 mlflow.set_tracking_uri(f"sqlite:///{mlflow_db}")
-mlflow.set_experiment("v2-test-set-creation")
+mlflow.set_experiment("test-set-creation")
 mlflow.disable_system_metrics_logging()
 print(f"MLflow tracking enabled (SQLite): {mlflow_db}")
 
