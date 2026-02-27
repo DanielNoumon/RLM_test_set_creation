@@ -183,7 +183,7 @@ QUESTION_TYPES = {
 ## Running
 
 ```bash
-python -m pipeline.main
+python main.py
 ```
 
 Requires:

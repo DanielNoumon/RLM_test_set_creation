@@ -47,7 +47,7 @@ AZURE_OPENAI_API_KEY=your_key
 AZURE_OPENAI_ENDPOINT_GPT5=your_endpoint
 ```
 
-Edit question types and counts in `pipeline/main.py`:
+Edit question types and counts in `main.py`:
 ```python
 QUESTION_TYPES = {
     QuestionType.DIRECT_LOOKUP: QuestionConfig(
@@ -60,7 +60,7 @@ QUESTION_TYPES = {
 ## Usage
 
 ```bash
-python -m pipeline.main
+python main.py
 ```
 
 ### Input
