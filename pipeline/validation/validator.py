@@ -9,14 +9,14 @@ import re
 from typing import Dict, Any, List, Optional
 
 from ..parsing.document import Document
-from ..config import QuestionType
+from ..config import QuestionType, ValidationConfig
 
 
 class Validator:
     """Validate generated questions against source documents."""
 
-    # Minimum fraction of answer keywords found in passage
-    MIN_KEYWORD_RATIO = 0.25
+    def __init__(self, config: ValidationConfig = None):
+        self.config = config or ValidationConfig()
 
     def validate(
         self,
@@ -41,7 +41,7 @@ class Validator:
         ctx_ratio = self._compute_context_match(
             golden_ctx, sources, documents
         )
-        if ctx_ratio < 0.3:
+        if ctx_ratio < self.config.min_context_match:
             return {
                 "valid": False,
                 "reason": (
@@ -88,10 +88,11 @@ class Validator:
                 }
 
         # Check 4: context length
-        if len(golden_ctx.strip()) < 30:
+        min_len = self.config.min_context_length
+        if len(golden_ctx.strip()) < min_len:
             return {
                 "valid": False,
-                "reason": "context too short (<30 chars)",
+                "reason": f"context too short (<{min_len} chars)",
                 "match_ratio": ctx_ratio,
                 "answer_grounded": answer_grounded,
             }
@@ -186,7 +187,7 @@ class Validator:
             return a_norm in p_norm
 
         found = sum(1 for w in words if w in p_norm)
-        return (found / len(words)) >= self.MIN_KEYWORD_RATIO
+        return (found / len(words)) >= self.config.min_keyword_ratio
 
     @staticmethod
     def _is_toc_region(text: str) -> bool:

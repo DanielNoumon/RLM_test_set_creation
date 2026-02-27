@@ -25,6 +25,8 @@ class QAGenerator:
         question_type: QuestionType,
         difficulty: str,
         doc_metadata: dict = None,
+        temperature: float = None,
+        max_tokens: int = None,
     ) -> Optional[Dict[str, str]]:
         """Generate a single Q+A pair from a passage.
 
@@ -43,6 +45,8 @@ class QAGenerator:
         try:
             response = self.llm.completion(
                 messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
         except Exception as e:
             print(f"    LLM error: {e}")

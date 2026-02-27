@@ -35,7 +35,7 @@ class Pipeline:
     def __init__(self, config: TestSetConfig):
         self.config = config
         self.rng = random.Random(config.random_seed)
-        self.validator = Validator()
+        self.validator = Validator(config.validation)
 
         # LLM client — only used for Q+A generation
         self.llm = LLMClient(
@@ -130,6 +130,7 @@ class Pipeline:
                 documents=documents,
                 tracker=tracker,
                 rng=self.rng,
+                cfg=self.config.selection,
             )
             print(f"    Selected {len(candidates)} candidates")
 
@@ -159,6 +160,8 @@ class Pipeline:
                     question_type=qtype,
                     difficulty=qcfg.difficulty,
                     doc_metadata=candidate_meta,
+                    temperature=self.config.llm.temperature,
+                    max_tokens=self.config.llm.max_tokens,
                 )
                 metrics["llm_calls"] += 1
 
@@ -424,7 +427,8 @@ class Pipeline:
         )
         src_words = set(src_norm.split())
         for sec, fname, score in results:
-            if score < 3.0:
+            bm25_thresh = self.config.pipeline.hallucination_bm25_threshold
+            if score < bm25_thresh:
                 continue
             sec_text = sec.full_text.lower()
             sec_norm = _re.sub(r"\s+", " ", sec_text[:300])
@@ -432,7 +436,8 @@ class Pipeline:
             # Must be a genuinely different section
             overlap = len(src_words & sec_words)
             total = max(len(sec_words), 1)
-            if overlap / total > 0.5:
+            overlap_thresh = self.config.pipeline.hallucination_overlap_threshold
+            if overlap / total > overlap_thresh:
                 continue  # same/very similar section, skip
             # Count how many topic keywords appear in this section
             kw_hits = sum(

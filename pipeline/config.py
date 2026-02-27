@@ -1,5 +1,5 @@
 """
-Configuration for v2 Test Set Creator.
+Configuration for Test Set Creator.
 """
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field
@@ -44,11 +44,38 @@ class LLMConfig:
     model: str = "gpt-5"
     azure_endpoint: Optional[str] = None
     azure_api_version: str = "2024-12-01-preview"
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
+
+@dataclass
+class SelectionConfig:
+    """Configuration for passage selection strategies."""
+    min_section_words: int = 15
+    passage_max_chars: int = 1200
+    long_context_max_chars: int = 4000
+    long_context_span_size: int = 4
+
+
+@dataclass
+class ValidationConfig:
+    """Configuration for Q+A validation."""
+    min_keyword_ratio: float = 0.25
+    min_context_match: float = 0.3
+    min_context_length: int = 30
+
+
+@dataclass
+class PipelineConfig:
+    """Configuration for pipeline-level behaviour."""
+    hallucination_bm25_threshold: float = 3.0
+    hallucination_overlap_threshold: float = 0.5
+    mlflow_experiment_name: str = "test-set-creation"
 
 
 @dataclass
 class TestSetConfig:
-    """Main configuration for v2 test set creation."""
+    """Main configuration for test set creation."""
     # LLM settings
     llm: LLMConfig = field(default_factory=LLMConfig)
 
@@ -61,6 +88,11 @@ class TestSetConfig:
 
     # Question type configurations
     question_types: Dict[QuestionType, QuestionConfig] = field(default_factory=dict)
+
+    # Sub-configs
+    selection: SelectionConfig = field(default_factory=SelectionConfig)
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
+    pipeline: PipelineConfig = field(default_factory=PipelineConfig)
 
     # General settings
     random_seed: int = 42

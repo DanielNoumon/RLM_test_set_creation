@@ -14,6 +14,7 @@ import mlflow
 
 from pipeline.config import (
     TestSetConfig, LLMConfig, QuestionType, QuestionConfig,
+    SelectionConfig, ValidationConfig, PipelineConfig,
 )
 from pipeline.pipeline import Pipeline
 
@@ -26,7 +27,6 @@ load_dotenv()
 mlflow.openai.autolog()
 mlflow_db = _ROOT / "mlflow.db"
 mlflow.set_tracking_uri(f"sqlite:///{mlflow_db}")
-mlflow.set_experiment("test-set-creation")
 mlflow.disable_system_metrics_logging()
 print(f"MLflow tracking enabled (SQLite): {mlflow_db}")
 
@@ -53,6 +53,22 @@ def build_config(
     output_path: str = None,
     question_types: dict = None,
     random_seed: int = 42,
+    # LLM
+    temperature: float = None,
+    max_tokens: int = None,
+    # Selection
+    min_section_words: int = 15,
+    passage_max_chars: int = 1200,
+    long_context_max_chars: int = 4000,
+    long_context_span_size: int = 4,
+    # Validation
+    min_keyword_ratio: float = 0.25,
+    min_context_match: float = 0.3,
+    min_context_length: int = 30,
+    # Pipeline
+    hallucination_bm25_threshold: float = 3.0,
+    hallucination_overlap_threshold: float = 0.5,
+    mlflow_experiment_name: str = "test-set-creation",
 ) -> TestSetConfig:
     """Build a TestSetConfig with sensible defaults.
 
@@ -71,17 +87,37 @@ def build_config(
             model=model,
             azure_endpoint=azure_endpoint,
             azure_api_version=azure_api_version,
+            temperature=temperature,
+            max_tokens=max_tokens,
         ),
         corpus_name=corpus_name,
         input_documents_path=input_documents_path,
         output_path=output_path,
         question_types=question_types,
+        selection=SelectionConfig(
+            min_section_words=min_section_words,
+            passage_max_chars=passage_max_chars,
+            long_context_max_chars=long_context_max_chars,
+            long_context_span_size=long_context_span_size,
+        ),
+        validation=ValidationConfig(
+            min_keyword_ratio=min_keyword_ratio,
+            min_context_match=min_context_match,
+            min_context_length=min_context_length,
+        ),
+        pipeline=PipelineConfig(
+            hallucination_bm25_threshold=hallucination_bm25_threshold,
+            hallucination_overlap_threshold=hallucination_overlap_threshold,
+            mlflow_experiment_name=mlflow_experiment_name,
+        ),
         random_seed=random_seed,
     )
 
 
 def run_pipeline(config: TestSetConfig):
     """Run the pipeline with MLflow tracking."""
+    mlflow.set_experiment(config.pipeline.mlflow_experiment_name)
+
     enabled = config.get_enabled_question_types()
     total_q = config.get_total_enabled_questions()
 
@@ -271,11 +307,32 @@ if __name__ == "__main__":
     # CONFIGURATION - Adjust parameters here
     # ================================================
 
-    # -- LLM model (used ONLY for Q+A generation) --
+    # -- LLM --
     MODEL = "gpt-5"
+    TEMPERATURE = None       # None = API default
+    MAX_TOKENS = None        # None = API default
 
-    # -- Naming --
+    # -- Naming / paths --
     CORPUS_NAME = "DSL_corpus"
+    INPUT_PATH = None        # None = data/files_for_test_set
+    OUTPUT_PATH = None       # None = data/test_sets
+
+    # -- Selection thresholds --
+    MIN_SECTION_WORDS = 15
+    PASSAGE_MAX_CHARS = 1200
+    LONG_CONTEXT_MAX_CHARS = 4000
+    LONG_CONTEXT_SPAN_SIZE = 4
+
+    # -- Validation thresholds --
+    MIN_KEYWORD_RATIO = 0.25
+    MIN_CONTEXT_MATCH = 0.3
+    MIN_CONTEXT_LENGTH = 30
+
+    # -- Pipeline --
+    HALLUCINATION_BM25_THRESHOLD = 3.0
+    HALLUCINATION_OVERLAP_THRESHOLD = 0.5
+    MLFLOW_EXPERIMENT_NAME = "test-set-creation"
+    RANDOM_SEED = 42
 
     # -- Question types to generate --
     # Set enabled=False or remove a type to disable it.
@@ -347,7 +404,21 @@ if __name__ == "__main__":
     config = build_config(
         model=MODEL,
         corpus_name=CORPUS_NAME,
+        input_documents_path=INPUT_PATH,
+        output_path=OUTPUT_PATH,
         question_types=QUESTION_TYPES,
-        random_seed=42,
+        random_seed=RANDOM_SEED,
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS,
+        min_section_words=MIN_SECTION_WORDS,
+        passage_max_chars=PASSAGE_MAX_CHARS,
+        long_context_max_chars=LONG_CONTEXT_MAX_CHARS,
+        long_context_span_size=LONG_CONTEXT_SPAN_SIZE,
+        min_keyword_ratio=MIN_KEYWORD_RATIO,
+        min_context_match=MIN_CONTEXT_MATCH,
+        min_context_length=MIN_CONTEXT_LENGTH,
+        hallucination_bm25_threshold=HALLUCINATION_BM25_THRESHOLD,
+        hallucination_overlap_threshold=HALLUCINATION_OVERLAP_THRESHOLD,
+        mlflow_experiment_name=MLFLOW_EXPERIMENT_NAME,
     )
     run_pipeline(config)

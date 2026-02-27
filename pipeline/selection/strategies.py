@@ -9,7 +9,7 @@ import random
 from typing import List, Set, Tuple, Optional
 from dataclasses import dataclass
 
-from ..config import QuestionType
+from ..config import QuestionType, SelectionConfig
 from ..parsing.document import Section, Document
 from ..indexing.search_index import SearchIndex
 from ..indexing.entity_extractor import (
@@ -60,14 +60,17 @@ def select_passages(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Select passages suitable for a question type.
 
     Dispatches to type-specific strategy functions.
     """
+    if cfg is None:
+        cfg = SelectionConfig()
     strategy = _STRATEGIES.get(question_type, _generic_strategy)
     return strategy(
-        count, index, entities_map, documents, tracker, rng
+        count, index, entities_map, documents, tracker, rng, cfg
     )
 
 
@@ -81,6 +84,7 @@ def _direct_lookup_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find sections with specific, extractable facts.
 
@@ -92,7 +96,7 @@ def _direct_lookup_strategy(
     scored = []
     for ent in entities_map:
         sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 15:
+        if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
             continue
         score = (
             len(ent.numbers) * 2
@@ -119,6 +123,7 @@ def _paraphrase_lookup_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find sections with rich descriptive content.
 
@@ -129,7 +134,7 @@ def _paraphrase_lookup_strategy(
     scored = []
     for ent in entities_map:
         sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 25:
+        if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
             continue
         if _is_boilerplate(sec):
             continue
@@ -153,12 +158,13 @@ def _specific_jargon_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find sections with defined terms and abbreviations."""
     scored = []
     for ent in entities_map:
         sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 15:
+        if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
             continue
         score = (
             len(ent.defined_terms) * 3
@@ -180,6 +186,7 @@ def _multi_hop_within_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find pairs of sections within the SAME document
     that share entities (related topics).
@@ -199,7 +206,7 @@ def _multi_hop_within_strategy(
                 ea, eb = doc_entities[i], doc_entities[j]
                 if tracker.is_used(ea.section) and tracker.is_used(eb.section):
                     continue
-                if ea.section.word_count() < 15 or eb.section.word_count() < 15:
+                if ea.section.word_count() < cfg.min_section_words or eb.section.word_count() < cfg.min_section_words:
                     continue
                 # Must be from different sections/pages
                 if ea.section.heading == eb.section.heading:
@@ -277,6 +284,7 @@ def _multi_hop_between_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find pairs of sections from DIFFERENT documents
     that share entities.
@@ -295,10 +303,10 @@ def _multi_hop_between_strategy(
     for i in range(len(fnames)):
         for j in range(i + 1, len(fnames)):
             for ea in by_doc[fnames[i]]:
-                if ea.section.word_count() < 15:
+                if ea.section.word_count() < cfg.min_section_words:
                     continue
                 for eb in by_doc[fnames[j]]:
-                    if eb.section.word_count() < 15:
+                    if eb.section.word_count() < cfg.min_section_words:
                         continue
                     shared = _meaningful_shared(ea, eb)
                     if shared:
@@ -345,6 +353,7 @@ def _needle_in_haystack_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find sections with small, specific, easy-to-miss details.
 
@@ -375,6 +384,7 @@ def _temporal_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Document-versioning strategy: find sections from DIFFERENT
     documents that cover overlapping topics, so the question can
@@ -386,7 +396,7 @@ def _temporal_strategy(
         scored = []
         for ent in entities_map:
             sec = ent.section
-            if tracker.is_used(sec) or sec.word_count() < 15:
+            if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
                 continue
             score = len(ent.dates) * 3 + (1 if sec.has_dates else 0)
             if score > 0:
@@ -406,10 +416,10 @@ def _temporal_strategy(
     for i in range(len(fnames)):
         for j in range(i + 1, len(fnames)):
             for ea in by_doc[fnames[i]]:
-                if ea.section.word_count() < 15:
+                if ea.section.word_count() < cfg.min_section_words:
                     continue
                 for eb in by_doc[fnames[j]]:
-                    if eb.section.word_count() < 15:
+                    if eb.section.word_count() < cfg.min_section_words:
                         continue
                     shared = _meaningful_shared(ea, eb)
                     if shared:
@@ -455,6 +465,7 @@ def _lists_extraction_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find sections containing bullet or numbered lists.
 
@@ -464,7 +475,7 @@ def _lists_extraction_strategy(
     scored = []
     for ent in entities_map:
         sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 15:
+        if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
             continue
         if sec.has_list:
             # Use all_text length to prefer sections with
@@ -536,6 +547,7 @@ def _hallucination_test_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """For hallucination tests, we still need a passage as context
     for the LLM to know what the documents ARE about, so it can
@@ -552,9 +564,9 @@ def _hallucination_test_strategy(
     for sec, fname in all_sections:
         if len(results) >= count:
             break
-        if sec.word_count() < 20:
+        if sec.word_count() < cfg.min_section_words:
             continue
-        passage = _truncate_passage(sec.full_text, 600)
+        passage = _truncate_passage(sec.full_text, cfg.passage_max_chars // 2)
         results.append(PassageCandidate(
             passage=passage,
             source_documents=[fname],
@@ -575,6 +587,7 @@ def _tables_extraction_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Find sections with tabular or structured numeric data.
 
@@ -584,7 +597,7 @@ def _tables_extraction_strategy(
     scored = []
     for ent in entities_map:
         sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 15:
+        if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
             continue
         if sec.has_table:
             score = sec.word_count() + 100
@@ -608,12 +621,13 @@ def _generic_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Fallback: pick diverse, content-rich sections."""
     scored = []
     for ent in entities_map:
         sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 15:
+        if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
             continue
         if _is_boilerplate(sec):
             continue
@@ -635,8 +649,11 @@ def _build_candidates(
     scored: List[Tuple[SectionEntities, float]],
     count: int,
     tracker: DiversityTracker,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Convert scored entity entries into PassageCandidates."""
+    if cfg is None:
+        cfg = SelectionConfig()
     results = []
     for ent, _ in scored:
         if len(results) >= count:
@@ -645,7 +662,7 @@ def _build_candidates(
         if tracker.is_used(sec):
             continue
 
-        passage = _truncate_passage(sec.full_text, 1200)
+        passage = _truncate_passage(sec.full_text, cfg.passage_max_chars)
         results.append(PassageCandidate(
             passage=passage,
             source_documents=[ent.source_filename],
@@ -704,6 +721,7 @@ def _long_context_synthesis_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Provide large multi-section context spans for counting/
     structural questions (e.g. 'how many roles mention X?').
@@ -720,7 +738,7 @@ def _long_context_synthesis_strategy(
         if len(top_sections) < 3:
             continue
         # Build spans of 4 consecutive sections with stride 4
-        span_size = min(4, len(top_sections))
+        span_size = min(cfg.long_context_span_size, len(top_sections))
         for start_idx in range(0, len(top_sections) - 2, span_size):
             if len(results) >= count:
                 break
@@ -732,7 +750,7 @@ def _long_context_synthesis_strategy(
             # Section-aware assembly: only include COMPLETE sections
             # that fit within the char budget to avoid truncating
             # mid-content (which causes factually wrong golden answers).
-            max_chars = 4000
+            max_chars = cfg.long_context_max_chars
             parts = []
             included = []
             total_chars = 0
@@ -771,6 +789,7 @@ def _pinpointing_strategy(
     documents: List[Document],
     tracker: DiversityTracker,
     rng: random.Random,
+    cfg: SelectionConfig = None,
 ) -> List[PassageCandidate]:
     """Select sections with specific, locatable facts for questions
     that ask 'in which document / section can you find X?'.
@@ -781,7 +800,7 @@ def _pinpointing_strategy(
     scored = []
     for ent in entities_map:
         sec = ent.section
-        if tracker.is_used(sec) or sec.word_count() < 15:
+        if tracker.is_used(sec) or sec.word_count() < cfg.min_section_words:
             continue
         if _is_boilerplate(sec):
             continue
