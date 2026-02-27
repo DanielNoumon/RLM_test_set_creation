@@ -53,9 +53,6 @@ def build_config(
     output_path: str = None,
     question_types: dict = None,
     random_seed: int = 42,
-    # LLM
-    temperature: float = None,
-    max_tokens: int = None,
     # Selection
     min_section_words: int = 15,
     passage_max_chars: int = 1200,
@@ -87,8 +84,6 @@ def build_config(
             model=model,
             azure_endpoint=azure_endpoint,
             azure_api_version=azure_api_version,
-            temperature=temperature,
-            max_tokens=max_tokens,
         ),
         corpus_name=corpus_name,
         input_documents_path=input_documents_path,
@@ -309,8 +304,6 @@ if __name__ == "__main__":
 
     # -- LLM --
     MODEL = "gpt-5"
-    TEMPERATURE = None       # None = API default
-    MAX_TOKENS = None        # None = API default
 
     # -- Naming / paths --
     CORPUS_NAME = "DSL_corpus"
@@ -408,8 +401,6 @@ if __name__ == "__main__":
         output_path=OUTPUT_PATH,
         question_types=QUESTION_TYPES,
         random_seed=RANDOM_SEED,
-        temperature=TEMPERATURE,
-        max_tokens=MAX_TOKENS,
         min_section_words=MIN_SECTION_WORDS,
         passage_max_chars=PASSAGE_MAX_CHARS,
         long_context_max_chars=LONG_CONTEXT_MAX_CHARS,

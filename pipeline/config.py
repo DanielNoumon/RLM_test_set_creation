@@ -44,8 +44,6 @@ class LLMConfig:
     model: str = "gpt-5"
     azure_endpoint: Optional[str] = None
     azure_api_version: str = "2024-12-01-preview"
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
 
 
 @dataclass

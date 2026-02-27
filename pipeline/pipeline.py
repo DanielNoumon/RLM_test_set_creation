@@ -160,8 +160,6 @@ class Pipeline:
                     question_type=qtype,
                     difficulty=qcfg.difficulty,
                     doc_metadata=candidate_meta,
-                    temperature=self.config.llm.temperature,
-                    max_tokens=self.config.llm.max_tokens,
                 )
                 metrics["llm_calls"] += 1
 

@@ -48,18 +48,10 @@ class LLMClient:
     def completion(
         self,
         messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
     ) -> str:
         """Generate a chat completion."""
-        kwargs = {
-            "model": self.model,
-            "messages": messages,
-        }
-        if temperature is not None:
-            kwargs["temperature"] = temperature
-        if max_tokens is not None:
-            kwargs["max_completion_tokens"] = max_tokens
-
-        response = self.client.chat.completions.create(**kwargs)
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+        )
         return response.choices[0].message.content
