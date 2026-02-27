@@ -36,7 +36,7 @@ See `pipeline/WORKFLOW.md` for a detailed pipeline diagram and phase description
 ```bash
 conda create -n rlm_test_set_creation python=3.11
 conda activate rlm_test_set_creation
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Configuration

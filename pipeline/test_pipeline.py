@@ -1,10 +1,4 @@
-"""Quick smoke test for the v2 pipeline phases (no LLM calls)."""
-import sys
-from pathlib import Path
-
-_THIS_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(_THIS_DIR.parent))
-
+"""Quick smoke test for the pipeline phases (no LLM calls)."""
 import random
 from pipeline.parsing.pdf_parser import parse_pdf
 from pipeline.indexing.search_index import SearchIndex

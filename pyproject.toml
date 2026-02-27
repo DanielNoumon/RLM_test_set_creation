@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rlm-test-set-creation"
+version = "2.0.0"
+description = "Automated golden Q&A test set generation for RAG applications"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0.0",
+    "python-dotenv>=0.19.0",
+    "PyMuPDF>=1.23.0",
+    "mlflow>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8",
+    "mypy",
+]
+
+[tool.setuptools.packages.find]
+include = ["pipeline*"]
