@@ -17,15 +17,14 @@ from pipeline.config import (
 )
 from pipeline.pipeline import Pipeline
 
-# Project root
-_PROJECT_ROOT = Path(__file__).resolve().parent
+_ROOT = Path(__file__).resolve().parent
 
 # Load environment variables
 load_dotenv()
 
 # Configure MLflow tracking
 mlflow.openai.autolog()
-mlflow_db = _PROJECT_ROOT / "mlflow.db"
+mlflow_db = _ROOT / "mlflow.db"
 mlflow.set_tracking_uri(f"sqlite:///{mlflow_db}")
 mlflow.set_experiment("test-set-creation")
 mlflow.disable_system_metrics_logging()
@@ -60,13 +59,9 @@ def build_config(
     Override any parameter to experiment with different settings.
     """
     if input_documents_path is None:
-        input_documents_path = os.path.join(
-            str(_PROJECT_ROOT), "data", "files_for_test_set"
-        )
+        input_documents_path = str(_ROOT / "data" / "files_for_test_set")
     if output_path is None:
-        output_path = os.path.join(
-            str(_PROJECT_ROOT), "data", "test_sets"
-        )
+        output_path = str(_ROOT / "data" / "test_sets")
     if question_types is None:
         question_types = ALL_TYPES_DEFAULT
 
