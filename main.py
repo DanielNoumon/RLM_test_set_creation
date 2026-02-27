@@ -303,29 +303,29 @@ if __name__ == "__main__":
     # ================================================
 
     # -- LLM --
-    MODEL = "gpt-5"
+    MODEL = "gpt-5"  # Azure OpenAI deployment name for Q+A generation
 
     # -- Naming / paths --
-    CORPUS_NAME = "DSL_corpus"
-    INPUT_PATH = None        # None = data/files_for_test_set
-    OUTPUT_PATH = None       # None = data/test_sets
+    CORPUS_NAME = "DSL_corpus"  # Label used in output filenames and MLflow
+    INPUT_PATH = None  # Input PDFs/TXT/MD folder (None = data/files_for_test_set)
+    OUTPUT_PATH = None  # Output folder for test-set JSONs (None = data/test_sets)
 
     # -- Selection thresholds --
-    MIN_SECTION_WORDS = 15
-    PASSAGE_MAX_CHARS = 1200
-    LONG_CONTEXT_MAX_CHARS = 4000
-    LONG_CONTEXT_SPAN_SIZE = 4
+    MIN_SECTION_WORDS = 15  # Min words for a section to be a passage candidate
+    PASSAGE_MAX_CHARS = 1200  # Max chars per passage before truncation
+    LONG_CONTEXT_MAX_CHARS = 4000  # Max chars for combined long-context passage
+    LONG_CONTEXT_SPAN_SIZE = 4  # Consecutive sections to combine for long-context
 
     # -- Validation thresholds --
-    MIN_KEYWORD_RATIO = 0.25
-    MIN_CONTEXT_MATCH = 0.3
-    MIN_CONTEXT_LENGTH = 30
+    MIN_KEYWORD_RATIO = 0.25  # Answer keyword fraction needed to count as grounded
+    MIN_CONTEXT_MATCH = 0.3  # Min chunk-overlap ratio with source documents
+    MIN_CONTEXT_LENGTH = 30  # Passages shorter than this (chars) are rejected
 
     # -- Pipeline --
-    HALLUCINATION_BM25_THRESHOLD = 3.0
-    HALLUCINATION_OVERLAP_THRESHOLD = 0.5
-    MLFLOW_EXPERIMENT_NAME = "test-set-creation"
-    RANDOM_SEED = 42
+    HALLUCINATION_BM25_THRESHOLD = 3.0  # BM25 floor for hallucination verification
+    HALLUCINATION_OVERLAP_THRESHOLD = 0.5  # Overlap ratio to consider sections the same
+    MLFLOW_EXPERIMENT_NAME = "test-set-creation"  # MLflow experiment name
+    RANDOM_SEED = 42  # Fixed seed for reproducible selection; change for new samples
 
     # -- Question types to generate --
     # Set enabled=False or remove a type to disable it.
